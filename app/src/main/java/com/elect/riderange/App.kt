@@ -75,6 +75,7 @@ class Services(val context: Context) {
         scope.launch {
             // 1.0.x installs: settings, key, model and trips move into a first "Max G2" vehicle before anything reads them.
             trips.migrateToGarage()
+            trips.recomputeStatsIfNeeded()
             ready.value = true
             ride.start()
             alerts.start()

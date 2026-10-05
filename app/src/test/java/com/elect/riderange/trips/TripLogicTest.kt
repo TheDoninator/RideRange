@@ -14,6 +14,20 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TripLogicTest {
+    /** Real Max G2 pattern: 1 Hz samples, scooter speed every sample, odometer only refreshed every ~12 s. */
+    @Test
+    fun distanceWithSlowOdometerUsesScooterSpeed() {
+        val start = LatLon(37.08, -113.59)
+        val samples = (0..120).map { i ->
+            val pos = Geo.destination(start, 90.0, 7.0 * i)
+            Sample(t = i * 1000L, lat = pos.lat, lon = pos.lon, gpsAlt = 800.0, ele = 800.0, gpsSpeed = 7.0,
+                scooterSpeed = 7.0, odometerM = 1_000_000.0 + 7.0 * (i / 12 * 12))
+        }
+        val st = TripMath.stats(samples)
+        assertEquals(840.0, st.distanceM, 5.0)
+        assertEquals(7.0, st.avgSpeed, 0.1)
+    }
+
     /** A synthetic 1 Hz ride: [n] s at [v] m/s going east, climbing [grade], drawing [powerW]. */
     private fun ride(n: Int, v: Double, grade: Double = 0.0, powerW: Double? = 300.0, start: LatLon = LatLon(37.1, -113.6), pct0: Double = 80.0): List<Sample> {
         return (0..n).map { i ->
@@ -69,9 +83,10 @@ class TripLogicTest {
     }
 
     @Test
-    fun odometerPreferred() {
+    fun scooterSpeedPreferredOverOdometer() {
+        // Per-step distance comes from the scooter's own speed; the coarse odometer is not used per step.
         val r = ride(100, 8.0).mapIndexed { i, s -> s.copy(odometerM = 1000.0 + i * 7.0) }
-        assertEquals(700.0, TripMath.stats(r).distanceM, 1e-6)
+        assertEquals(800.0, TripMath.stats(r).distanceM, 1e-6)
     }
 
     @Test

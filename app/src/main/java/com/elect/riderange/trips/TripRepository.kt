@@ -125,6 +125,32 @@ class TripRepository(
 
     suspend fun delete(id: Long) { dao.deleteSamples(id); dao.delete(id) }
 
+    /**
+     * Recomputes stats and the recorded prediction of every finished trip from its stored samples, once per
+     * [STATS_VERSION] (1.2.1: distance was undercounted when the odometer was polled less often than samples).
+     */
+    suspend fun recomputeStatsIfNeeded() {
+        val prefs = context.getSharedPreferences("trip_migrations", Context.MODE_PRIVATE)
+        if (prefs.getInt("stats_version", 0) >= STATS_VERSION) return
+        val cfg = settings.current()
+        for (t in dao.finishedList()) {
+            val samples = dao.samples(t.id).map { it.toSample() }
+            if (samples.size < 2) continue
+            val vehicle = cfg.vehicles.firstOrNull { it.id == t.vehicleId } ?: cfg.vehicle
+            val stats = TripMath.stats(samples, vehicle?.packWh ?: cfg.range.packWh)
+            val coef = t.modelCoef?.split(",")?.mapNotNull { it.trim().toDoubleOrNull() }?.toDoubleArray()
+            val model: ConsumptionModel = when {
+                coef != null && coef.isNotEmpty() -> LearnedModel(coef, 0.0, 0.0, t.modelLabel ?: "Learned model")
+                vehicle != null -> PhysicsModel(vehicle.params(cfg.enteredMassKg), vehicle.defaultWhPerMi)
+                else -> PhysicsModel(RideParams(), cfg.range.defaultWhPerMi)
+            }
+            val predicted = EnergyModel.segmentsWh(TripMath.modelSegments(samples, tempC = stats.avgTempC ?: t.weatherTempC), model)
+            dao.update(t.withStats(stats).copy(predictedWh = predicted))
+        }
+        prefs.edit().putInt("stats_version", STATS_VERSION).apply()
+        refit()
+    }
+
     /** Refit the active vehicle's learned model from its last 50 trips with measured power, and refresh [info]. */
     suspend fun refit() {
         val cfg = settings.current()
@@ -199,3 +225,5 @@ class TripRepository(
 
     fun appVersion(): String = BuildConfig.VERSION_NAME
 }
+
+private const val STATS_VERSION = 1

@@ -12,8 +12,8 @@ android {
         applicationId = "com.elect.riderange"
         minSdk = 26
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.2.0"
+        versionCode = 6
+        versionName = "1.2.1"
         // Phone (arm64) + emulator (x86_64) only: MapLibre ships big native libraries per ABI.
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }

@@ -58,10 +58,13 @@ object TripMath {
     private const val MAX_STEP_MPS = 40.0
 
     fun stepDistance(a: Sample, b: Sample): Double {
-        // Odometer is the best distance source when both have it (whole metres).
-        if (a.odometerM != null && b.odometerM != null) {
-            val d = b.odometerM - a.odometerM
-            if (d in 0.0..(MAX_STEP_MPS * max(1.0, (b.t - a.t) / 1000.0))) return d
+        // Scooter speed integrated over the step: the vehicle's own wheel speed, read several times a second.
+        // (Not the odometer: it is polled every ~12 s, so per-second steps would read 0 and then one big jump.
+        // On a real 4.46 km Max G2 ride, speed integration gave 4.44 km and GPS 4.43 km.)
+        val dtS = (b.t - a.t) / 1000.0
+        if (a.scooterSpeed != null && b.scooterSpeed != null && dtS > 0) {
+            val d = (a.scooterSpeed + b.scooterSpeed) / 2 * dtS
+            if (d / dtS <= MAX_STEP_MPS) return d
         }
         val d = Geo.distance(a.pos, b.pos)
         val dt = max(0.5, (b.t - a.t) / 1000.0)
