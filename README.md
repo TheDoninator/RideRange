@@ -1,7 +1,8 @@
 # RideRange
 
-A ride companion for electric scooters and one-wheel boards (Segway-Ninebot Max G2 and other Ninebots, Onewheel
-Pint / Pint X / Pint S / XR / XR Classic / GT / GT-S / Onewheel+, VESC "float" boards, or any vehicle in manual mode):
+A ride companion for electric scooters, one-wheel boards, e-skateboards and e-bikes (Segway-Ninebot Max G2 and other
+Ninebots, Onewheel Pint / Pint X / Pint S / XR / XR Classic / GT / GT-S / Onewheel+, VESC "float" boards, VESC
+e-scooters, e-skateboards (single or dual motor) and e-bikes, or any vehicle in manual mode):
 
 - **Ride** – full-screen map with two range circles around you: **one-way** (blue) and **round trip** (green), a big
   speed readout (scooter speed when connected, GPS otherwise), battery %, and bike lanes/paths highlighted in green.
@@ -28,7 +29,7 @@ To get update notices, enter `TheDoninator/RideRange` under Settings → About �
 To build it yourself: `./gradlew assembleDebug` (output: `app/build/outputs/apk/debug/app-debug.apk`).
 
 Copy it to the phone and open it (allow "install unknown apps" for your file manager once), or with the phone
-connected: `adb install -r RideRange-1.1.0-debug.apk`. A new install starts with a short intro (units, your weight, your
+connected: `adb install -r RideRange-1.2.0-debug.apk`. A new install starts with a short intro (units, your weight, your
 first vehicle, what each permission is for). Installing 1.1.0 over 1.0.x keeps everything: the old settings, pairing
 key, learned model and all trips become a first vehicle called "Max G2" and the intro is skipped.
 
@@ -43,13 +44,49 @@ board 20s 576 Wh. One-wheel boards use their own physics (fat tyre: higher rolli
 cruise, stronger regen) and their own routing profiles: `onewheel-trails.brf` / `onewheel-traffic.brf` allow dirt
 tracks, unpaved surfaces and MTB scale 0-2; scooters keep avoiding rough surfaces; steps are excluded for everyone.
 
+## Full VESC telemetry (1.2.0)
+
+- **More VESC vehicles**: presets for a VESC e-scooter, e-bike and e-skateboard (single and dual motor) besides the
+  Float board, each with its own physics (rolling resistance, drag, cruise speed, regen) and a **gear ratio** for belt
+  drives. Routing: e-skateboards get paved-only BRouter profiles (`eskate-trails.brf` / `eskate-traffic.brf`: unpaved
+  paths, tracks and MTB trails impassable), e-bikes use BRouter's own trekking / safety profiles. The Rules tab leads
+  with e-bike rules for e-bikes and a note on electric skateboards.
+- **Float package** (via COMM_CUSTOM_APP_DATA, read sub-commands only): a Float panel on the Ride tab with board state,
+  duty cycle, pitch, roll, both footpad sensors and the setpoint / pushback reason. **Pushback (duty, high/low voltage,
+  temperature) and high duty cycle** (default 85 %, adjustable) show a red banner and **vibrate + speak** ("Pushback.
+  Duty cycle."): at the start, then every 10 s while it lasts, never closer than 3 s. The speaker button on the panel
+  (or Settings > Riding) mutes the alerts; the banner stays.
+- **VESC BMS** (COMM_BMS_GET_VALUES): state of charge, pack voltage/current, health, every cell voltage (balancing cells
+  outlined), temperatures. **COMM_GET_VALUES_SETUP**: the controller's battery level, Wh left, speed and odometer from its
+  own wheel/gearing config. Battery % uses the BMS first, then the controller's level, then pack voltage ÷ cells
+  (the Ride tab says which: "live · VESC BMS"). Speed/odometer prefer the controller's own figures.
+- **Dual motor / CAN**: COMM_PING_CAN finds the other CAN devices; each is read with COMM_FORWARD_CAN (2 requests/s shared,
+  so 1 Hz per motor on a dual setup; ids that never answer, like a BMS or BLE module, are retried only every 10 s).
+  The Connect page shows every controller (temps, phase/battery current, power, duty, ERPM, fault); the Ride panel a
+  per-motor line. **Total power** = the controller's own CAN total when it counts every VESC, else the sum of the
+  controllers; that total goes into trips, range, the mass estimate and the learned model.
+- **Read-only, enforced in code**: `VescProtocol.isReadOnly` is an allow-list over whole payloads: COMM_FW_VERSION,
+  COMM_GET_VALUES, COMM_GET_VALUES_SETUP, COMM_PING_CAN, COMM_BMS_GET_VALUES with no arguments; COMM_FORWARD_CAN only
+  around one of those (no nesting, no broadcast id); COMM_CUSTOM_APP_DATA only as Float `101, 0` (info) or `101, 1`
+  (real-time data). Every write goes through `ReadOnlyWriter`, which throws on anything else. No set/config/firmware/
+  package commands exist in the app.
+- **Parsers** are our own, written from the documented layouts (bldc firmware `datatypes.h` / `commands.c` / `bms.c`,
+  Float package `float.c` real-time data), no GPL code copied. Targets: VESC firmware 5.x-6.x (older 3.x/4.x replies
+  without the trailing fields still parse; no controller id means no CAN polling), VESC BMS firmware with SOC/SOH
+  and totals, **Float package 1.x** (tested layout 1.3). Missing trailing fields become "unknown"; extra fields are
+  ignored; Float values outside a physical range (another package such as Refloat answering differently) are hidden.
+- **Debug-only simulator**: debug builds show "Sim: Float board" / "Sim: dual motor" on the Connect page for VESC
+  vehicles. `src/debug/.../SimulatedVesc.kt` answers the app's frames with documented-layout replies in 20-byte
+  chunks through the real decoder (a 60 s loop with a climb that triggers pushback). It isn't compiled into release
+  builds, and `VescSimulator.open` also checks `BuildConfig.DEBUG` (verified: the release dex has no simulator class).
+
 ## Vehicle connections (all read-only)
 
 - **Ninebot / Segway** – unchanged protocol from Ninebot Bridge (see below).
-- **VESC boards** – own implementation of the documented VESC frame format (0x02/0x03 framing, CRC-16/XMODEM) over
-  the Nordic UART service. Only `COMM_FW_VERSION` and `COMM_GET_VALUES` can be encoded; nothing that drives the
-  motor or changes configuration. Battery % comes from pack voltage / cells in series, speed and distance from ERPM /
-  motor pole pairs and the tyre size (set these per vehicle).
+- **VESC vehicles** – own implementation of the documented VESC frame format (0x02/0x03 framing, CRC-16/XMODEM) over
+  the Nordic UART service; only the read requests listed above can be encoded (see "Full VESC telemetry"). Without
+  BMS / setup values, battery % comes from pack voltage / cells in series, speed and distance from ERPM / pole pairs /
+  gear ratio and the wheel size (set these per vehicle).
 - **Future Motion Onewheel** – connects, reads the firmware and hardware revision (readable without authentication)
   and only subscribes to live values on firmware that shares them with third-party apps: **Onewheel V1 / Onewheel+
   before the 2018 "Gemini" update (firmware < 4034)**. Gemini firmware (4034+ on Onewheel+, 4134+ on XR) needs a
@@ -147,7 +184,12 @@ from the real Max G2 report, and the NbCrypto vectors copied from Ninebot Bridge
 validation, per-vehicle physics/range and learned models, the 1.0.x to garage migration (plus the Room v2 SQL), VESC
 framing/CRC/GET_VALUES decoding against independently built vectors (CRC check value 0x31C3, the published
 `02 01 04 40 84 03` request), Onewheel characteristic parsing and the firmware gate, routing profile per vehicle type,
-one-wheel board rules (UT, CA, default), server URLs and the update-check version compare.
+one-wheel board rules (UT, CA, default), server URLs and the update-check version compare. 1.2.0 (128 tests): the
+VESC allow-list and `ReadOnlyWriter` (set/config/nested/broadcast/Float-tune payloads refused, nothing sent),
+COMM_FORWARD_CAN framing, GET_VALUES_SETUP / BMS / PING_CAN / FW_VERSION / Float info + real-time parsing against frames
+built independently with Python `struct` + CRC (plus truncated and extended variants), polling schedule and rates,
+CAN controller tracking and summed power, battery-source priority, duty/pushback warnings with hysteresis and rate
+limiting, VESC presets / gear ratio / paved-only e-skate profiles, and the debug simulator through the real decoder.
 
 `tools/gen_regulations.py` regenerates `assets/regulations.json`; `tools/check_links.py` checks every source link.
 
@@ -158,6 +200,10 @@ one-wheel board rules (UT, CA, default), server URLs and the update-check versio
 - Only Utah is checked line by line against the statutes. Other states are short summaries marked "Summary" with
   links to the state code; some city entries (Cedar City, Hurricane, Washington, Ogden, Logan) say no specific
   ordinance was found. Municipal code sites block automated access, so check the linked code.
+- **VESC 1.2.0 telemetry is untested on real hardware**: no VESC, BMS or Float board was available. Everything ran
+  against the debug simulator and hand-built frames that follow the documented layouts; the Float real-time layout in
+  particular may differ between package versions (fields then show as missing). Alerts were checked on the emulator
+  (banner, mute), not on a phone's vibrator/speaker while riding.
 - **Onewheel and VESC links are untested on real hardware** (no board was available): the codecs are unit-tested,
   the Bluetooth paths only ran on the emulator. Most Future Motion boards in use today run firmware that refuses
   third-party apps, so expect manual mode on them.

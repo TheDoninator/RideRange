@@ -72,7 +72,12 @@ fun RideOverlay(vm: MainViewModel) {
                         }
                         Text(
                             when {
-                                fromScooter -> "${vehicle?.type?.vehicleClass?.let { if (it == com.elect.riderange.vehicle.VehicleClass.ONEWHEEL) "Board" else "Scooter" } ?: "Vehicle"} speed"
+                                fromScooter -> "${when (vehicle?.type?.vehicleClass) {
+                                    com.elect.riderange.vehicle.VehicleClass.ONEWHEEL, com.elect.riderange.vehicle.VehicleClass.E_SKATEBOARD -> "Board"
+                                    com.elect.riderange.vehicle.VehicleClass.E_BIKE -> "Bike"
+                                    com.elect.riderange.vehicle.VehicleClass.KICK_SCOOTER -> "Scooter"
+                                    else -> "Vehicle"
+                                }} speed"
                                 fix == null -> "Waiting for GPS…"
                                 else -> "GPS speed"
                             },
@@ -128,7 +133,6 @@ fun RideOverlay(vm: MainViewModel) {
                     }
                 }
             }
-            VescRidePanel(vm)
         }
 
         Column(Modifier.align(Alignment.CenterEnd), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -143,6 +147,8 @@ fun RideOverlay(vm: MainViewModel) {
             ) { Icon(Icons.Filled.LocalParking, "Show bike parking") }
         }
 
+        // VESC: Float / dual-motor panel just above the trip button (clear of the map buttons on the right).
+        Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 64.dp)) { VescRidePanel(vm) }
         Row(Modifier.align(Alignment.BottomCenter).fillMaxWidth(), horizontalArrangement = Arrangement.Center) {
             if (rec.active) {
                 Button(onClick = { s.ride.manualStop() }, colors = ButtonDefaults.buttonColors(containerColor = RideColors.Red),

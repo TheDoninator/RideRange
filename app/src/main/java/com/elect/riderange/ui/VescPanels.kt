@@ -53,7 +53,7 @@ private fun dutyColor(duty: Double, threshold: Double) = when {
 private fun Pad(label: String, volts: Double?) {
     val on = (volts ?: 0.0) > 2.5
     Box(
-        Modifier.size(width = 48.dp, height = 40.dp).background(if (on) RideColors.RoundTrip.copy(alpha = 0.85f) else Color(0xFF2A3A47), RoundedCornerShape(8.dp)),
+        Modifier.size(width = 50.dp, height = 46.dp).background(if (on) RideColors.RoundTrip.copy(alpha = 0.85f) else Color(0xFF2A3A47), RoundedCornerShape(8.dp)),
         contentAlignment = Alignment.Center,
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
