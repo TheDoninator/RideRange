@@ -16,6 +16,7 @@ import com.elect.riderange.scooter.ScooterPhase
 import com.elect.riderange.trips.ElevationFilter
 import com.elect.riderange.trips.Sample
 import com.elect.riderange.trips.TripDetector
+import com.elect.riderange.trips.VehicleOffDetector
 import com.elect.riderange.trips.TripMath
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -90,6 +91,7 @@ class RideHub(private val s: Services) {
     private var elevation = ElevationFilter()
     private var ticker: Job? = null
     private var lastSample: Sample? = null
+    private val vehicleOff = VehicleOffDetector()
 
     fun start() {
         scope.launch {
@@ -144,7 +146,10 @@ class RideHub(private val s: Services) {
         if (!rec.active) {
             preBuffer.addLast(sample)
             while (preBuffer.size > 35) preBuffer.removeFirst()
-            if (settings.value.autoTrips && detector.onSpeed(v, now) == TripDetector.Event.START) beginTrip(manual = false)
+            if (settings.value.autoTrips && detector.onSpeed(v, now) == TripDetector.Event.START) {
+                beginTrip(manual = false)
+                s.alerts.announce("Trip recording started")
+            }
             return
         }
         val id = rec.tripId ?: return
@@ -153,7 +158,13 @@ class RideHub(private val s: Services) {
         lastSample = sample
         _rec.value = rec.copy(distanceM = rec.distanceM + d)
         s.scooter.state.value.serial?.let { serial -> s.trips.setSerial(id, serial) }
-        if (detector.onSpeed(v, now) == TripDetector.Event.STOP) endTrip()
+        val off = vehicleOff.onSample(sample.scooterSpeed != null || sample.voltage != null, sample.gpsSpeed, now)
+        if (off || detector.onSpeed(v, now) == TripDetector.Event.STOP) {
+            if (off) detector.manualStop()
+            val dist = _rec.value.distanceM
+            endTrip()
+            s.alerts.announce("Trip saved, " + com.elect.riderange.core.Units(settings.value.metric).range(dist).replace(" mi", " miles").replace(" km", " kilometers"))
+        }
     }
 
     private suspend fun beginTrip(manual: Boolean) {
@@ -162,6 +173,7 @@ class RideHub(private val s: Services) {
         val startMs = pre.firstOrNull()?.t ?: System.currentTimeMillis()
         val id = s.trips.startTrip(startMs, s.scooter.state.value.serial, pre, vehicle.value?.id)
         lastSample = pre.lastOrNull()
+        vehicleOff.reset()
         val dist = pre.zipWithNext().sumOf { (a, b) -> TripMath.stepDistance(a, b) }
         _rec.value = RecordingState(true, id, startMs, dist, manual)
     }

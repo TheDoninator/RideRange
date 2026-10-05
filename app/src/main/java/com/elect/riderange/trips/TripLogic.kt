@@ -182,13 +182,16 @@ object TripMath {
 
 /**
  * Auto start/stop: a trip starts after moving faster than 3 mph for 30 s, and ends after 3 minutes stopped
- * (below ~1 mph). Manual start/stop overrides it.
+ * (below ~1 mph). While stopped, only real riding (faster than 3 mph for 5 s) cancels the stop: GPS drift
+ * of a few seconds at walking pace (seen on a real ride) used to reset the 3-minute timer, so the trip never
+ * ended. Manual start/stop overrides it.
  */
 class TripDetector(
     private val startMps: Double = 3 * Geo.MPS_PER_MPH,
     private val startHoldMs: Long = 30_000,
     private val stopMps: Double = 1 * Geo.MPS_PER_MPH,
     private val stopHoldMs: Long = 180_000,
+    private val resumeHoldMs: Long = 5_000,
 ) {
     enum class Event { NONE, START, STOP }
 
@@ -198,8 +201,9 @@ class TripDetector(
         private set
     private var fastSince: Long? = null
     private var slowSince: Long? = null
+    private var resumeSince: Long? = null
 
-    fun manualStart() { recording = true; manual = true; slowSince = null }
+    fun manualStart() { recording = true; manual = true; slowSince = null; resumeSince = null }
     fun manualStop() { recording = false; manual = false; fastSince = null }
 
     fun onSpeed(speedMps: Double, nowMs: Long): Event {
@@ -213,18 +217,49 @@ class TripDetector(
             } else fastSince = null
             return Event.NONE
         }
-        if (speedMps < stopMps) {
-            val since = slowSince ?: nowMs.also { slowSince = it }
-            if (!manual && nowMs - since >= stopHoldMs) {
-                recording = false; slowSince = null
-                return Event.STOP
+        val stopped = slowSince
+        when {
+            stopped == null -> if (speedMps < stopMps) slowSince = nowMs
+            speedMps > startMps -> {
+                val since = resumeSince ?: nowMs.also { resumeSince = it }
+                if (nowMs - since >= resumeHoldMs) { slowSince = null; resumeSince = null }
             }
-        } else slowSince = null
+            else -> resumeSince = null
+        }
+        val since = slowSince
+        if (!manual && since != null && nowMs - since >= stopHoldMs) {
+            recording = false; slowSince = null; resumeSince = null
+            return Event.STOP
+        }
         return Event.NONE
     }
 
     /** Samples recorded during the start hold, so the first 30 s aren't lost. */
     val startHoldMsValue: Long get() = startHoldMs
+}
+
+/**
+ * Ends a trip when the vehicle is switched off: it had sent live data during this trip, then its data stopped
+ * (link lost) while the phone stays still (GPS below ~1 mph) for [holdMs]. A dropped link while still moving
+ * doesn't count, so a Bluetooth hiccup mid-ride never cuts a trip. Applies to manual trips too.
+ */
+class VehicleOffDetector(
+    private val holdMs: Long = 30_000,
+    private val stillMps: Double = 1 * Geo.MPS_PER_MPH,
+) {
+    private var seenVehicle = false
+    private var offSince: Long? = null
+
+    fun reset() { seenVehicle = false; offSince = null }
+
+    /** Returns true once, when the trip should end. */
+    fun onSample(hasVehicleData: Boolean, gpsSpeedMps: Double?, nowMs: Long): Boolean {
+        if (hasVehicleData) { seenVehicle = true; offSince = null; return false }
+        if (!seenVehicle || (gpsSpeedMps ?: 0.0) >= stillMps) { offSince = null; return false }
+        val since = offSince ?: nowMs.also { offSince = it }
+        if (nowMs - since >= holdMs) { reset(); return true }
+        return false
+    }
 }
 
 /**

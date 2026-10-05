@@ -14,6 +14,54 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class TripLogicTest {
+    @Test
+    fun vehicleSwitchedOffEndsTrip() {
+        val d = VehicleOffDetector()
+        var t = 0L
+        fun step(data: Boolean, gps: Double?) = d.onSample(data, gps, t).also { t += 1000 }
+        repeat(60) { assertFalse(step(true, 7.0)) }               // riding with live scooter data
+        repeat(20) { assertFalse(step(false, 6.0)) }              // link drop while moving: never ends
+        val ends = (1..40).map { step(false, 0.0) }               // parked, scooter off
+        assertEquals(1, ends.count { it })
+        assertTrue(ends[30])                                      // after 30 s still and silent
+    }
+
+    @Test
+    fun noVehicleDataNeverTriggersOff() {
+        val d = VehicleOffDetector()
+        assertFalse((0..300).any { d.onSample(false, 0.0, it * 1000L) })   // GPS-only trip
+    }
+
+    /** Real ride: a 4-minute stop with a few seconds of GPS drift at ~2 mph must still end the trip. */
+    @Test
+    fun stopSurvivesGpsDrift() {
+        val d = TripDetector()
+        var t = 0L
+        fun feed(v: Double, secs: Int): TripDetector.Event {
+            var last = TripDetector.Event.NONE
+            repeat(secs) { val e = d.onSpeed(v, t); if (e != TripDetector.Event.NONE) last = e; t += 1000 }
+            return last
+        }
+        assertEquals(TripDetector.Event.START, feed(8.0, 40))
+        assertEquals(TripDetector.Event.NONE, feed(0.0, 130))
+        assertEquals(TripDetector.Event.NONE, feed(1.0, 4))      // drift
+        assertEquals(TripDetector.Event.STOP, feed(0.0, 60))     // 3 min after the stop began
+        assertFalse(d.recording)
+        assertEquals(TripDetector.Event.START, feed(8.0, 40))    // riding on starts a new trip
+    }
+
+    @Test
+    fun realRidingCancelsTheStop() {
+        val d = TripDetector()
+        var t = 0L
+        fun feed(v: Double, secs: Int) = (1..secs).map { d.onSpeed(v, t).also { t += 1000 } }.lastOrNull { it != TripDetector.Event.NONE }
+        feed(8.0, 40)
+        feed(0.0, 170)
+        feed(6.0, 10)                                            // rode off
+        assertNull(feed(0.0, 170))                               // a fresh stop, not yet 3 min
+        assertTrue(d.recording)
+    }
+
     /** Real Max G2 pattern: 1 Hz samples, scooter speed every sample, odometer only refreshed every ~12 s. */
     @Test
     fun distanceWithSlowOdometerUsesScooterSpeed() {

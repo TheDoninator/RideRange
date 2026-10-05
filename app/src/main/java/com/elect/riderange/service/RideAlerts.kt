@@ -62,6 +62,11 @@ class RideAlerts(private val s: Services) {
         }
     }
 
+    /** Short spoken status (automatic trip start/stop), so the rider knows without looking. Follows the voice-alert switch. */
+    fun announce(text: String) {
+        if (s.settingsState.value.rideAlerts) speak(text)
+    }
+
     private fun speak(text: String) {
         val t = tts ?: TextToSpeech(s.context) { status ->
             ttsReady = status == TextToSpeech.SUCCESS
