@@ -30,7 +30,8 @@ class VescProtocolTest {
     }
 
     @Test fun readOnlyWhitelistHasOnlyReads() {
-        assertEquals(setOf(0, 4), VescProtocol.READ_ONLY_COMMANDS)
+        // 1.2.0 adds the other gets (setup values, CAN ping, BMS) and the two checked wrappers.
+        assertEquals(setOf(0, 4, 47, 62, 96, 34, 36), VescProtocol.READ_ONLY_COMMANDS)
     }
 
     /** Built independently with Python struct (big-endian) + CRC-16/XMODEM, not with VescProtocol. */
