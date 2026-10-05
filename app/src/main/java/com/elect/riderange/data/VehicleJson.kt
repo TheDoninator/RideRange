@@ -30,6 +30,7 @@ object VehicleJson {
             v.wheelDiameterMm?.let { put("wheelMm", it) }
             v.motorPolePairs?.let { put("polePairs", it) }
             v.cellsSeries?.let { put("cells", it) }
+            v.gearRatio?.let { put("gear", it) }
             v.model?.let { put("model", modelToJson(it)) }
         }
 
@@ -47,6 +48,7 @@ object VehicleJson {
             wheelDiameterMm = if (o.has("wheelMm")) o.optDouble("wheelMm") else base.wheelDiameterMm,
             motorPolePairs = if (o.has("polePairs")) o.optInt("polePairs") else base.motorPolePairs,
             cellsSeries = if (o.has("cells")) o.optInt("cells") else base.cellsSeries,
+            gearRatio = if (o.has("gear")) o.optDouble("gear") else base.gearRatio,
             model = modelFrom(o.optJSONObject("model")),
             createdMs = o.optLong("created"),
         )

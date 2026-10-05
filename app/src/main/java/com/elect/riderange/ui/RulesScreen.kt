@@ -62,7 +62,8 @@ fun RulesScreen(vm: MainViewModel) {
     var picking by remember { mutableStateOf(false) }
     val vehicle by vm.s.ride.vehicle.collectAsStateWithLifecycle()
     val vClass = vehicle?.type?.vehicleClass ?: VehicleClass.KICK_SCOOTER
-    val boardsFirst = regs.primaryFor(vClass) == "boards"
+    val primary = regs.primaryFor(vClass)
+    val boardsFirst = primary == "boards"
 
     LazyColumn(
         Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(horizontal = 14.dp),
@@ -70,7 +71,12 @@ fun RulesScreen(vm: MainViewModel) {
     ) {
         item {
             Spacer(Modifier.height(12.dp))
-            Text(if (boardsFirst) "Rules for one-wheel boards" else "Rules for e-scooters & e-bikes", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(when (primary) {
+                "boards" -> "Rules for one-wheel boards"
+                "ebike" -> "Rules for e-bikes"
+                "eskate" -> "Rules for electric skateboards"
+                else -> "Rules for e-scooters & e-bikes"
+            }, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
             vehicle?.let { Text("For your ${it.name} (${it.type.label})", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             Spacer(Modifier.height(6.dp))
             Card(colors = CardDefaults.cardColors(containerColor = Color(0xFF3A2A06))) {
@@ -109,6 +115,7 @@ fun RulesScreen(vm: MainViewModel) {
             item { Text("No state selected yet.", style = MaterialTheme.typography.bodyLarge) }
         } else {
             val boards = regs.boards(state)
+            if (primary == "eskate") item { EskateCard() }
             if (boardsFirst && boards != null) item { BoardsCard(boards) }
             item {
                 Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)) {
@@ -125,8 +132,9 @@ fun RulesScreen(vm: MainViewModel) {
             city?.let { c ->
                 item { RulesCard("${c.city} (city rules)", RideColors.Amber, c.summary, c.scooter, c.ebike, c.sources) }
             }
+            if (primary == "ebike") item { RulesCard("E-bikes (state law)", RideColors.RoundTrip, null, state.ebike, null, emptyList()) }
             item { RulesCard("E-scooters (state law)", RideColors.OneWay, null, state.scooter, null, emptyList()) }
-            item { RulesCard("E-bikes (state law)", RideColors.RoundTrip, null, state.ebike, null, emptyList()) }
+            if (primary != "ebike") item { RulesCard("E-bikes (state law)", RideColors.RoundTrip, null, state.ebike, null, emptyList()) }
             if (!boardsFirst && boards != null) item { BoardsCard(boards) }
             item { SourcesCard("Sources", state.sources) }
             item { Spacer(Modifier.height(20.dp)) }
@@ -172,6 +180,23 @@ private fun RulesCard(title: String, accent: Color, summary: String?, rules: Rul
                 Spacer(Modifier.height(8.dp))
                 SourceLinks(sources)
             }
+        }
+    }
+}
+
+/** Electric skateboards: no state-by-state dataset yet, so a plain note on how they are usually treated. */
+@Composable
+private fun EskateCard() {
+    Card(shape = RoundedCornerShape(16.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
+        Column(Modifier.padding(14.dp)) {
+            Text("Electric skateboards", style = MaterialTheme.typography.titleLarge, color = Color(0xFFC792EA))
+            Spacer(Modifier.height(4.dp))
+            Text("Most state codes summarised here don't define electric skateboards: they have no handlebars (so they aren't " +
+                "e-scooters) and no pedals (so they aren't e-bikes). Local skateboard and motorized-device ordinances and park/trail " +
+                "rules are what usually apply, so check your city. California's \"electrically motorized board\" (Vehicle Code 313.5, " +
+                "shown in the board card below for CA) does cover them.", style = MaterialTheme.typography.bodyLarge)
+            Spacer(Modifier.height(4.dp))
+            Text("Summary: check your local code", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }

@@ -7,6 +7,8 @@ import com.elect.riderange.range.RideParams
 enum class VehicleClass(val label: String) {
     KICK_SCOOTER("E-scooter"),
     ONEWHEEL("One-wheel board"),
+    E_SKATEBOARD("Electric skateboard"),
+    E_BIKE("E-bike"),
     OTHER("Other / manual"),
 }
 
@@ -34,6 +36,10 @@ data class VehiclePreset(
     /** VESC only: motor pole pairs (ERPM -> wheel RPM) and battery cells in series (voltage -> %). */
     val motorPolePairs: Int? = null,
     val cellsSeries: Int? = null,
+    /** VESC only: motor turns per wheel turn (belt drive / geared hub); 1 for a direct-drive hub motor. */
+    val gearRatio: Double? = null,
+    /** Motor controllers a typical build has (dual-motor boards: 2, the second one read over CAN). */
+    val motors: Int = 1,
 )
 
 // Onewheel physics defaults: the 11" pneumatic tyre at low pressure on mixed surfaces rolls much harder than a
@@ -96,7 +102,35 @@ enum class VehicleType(val label: String, val vehicleClass: VehicleClass, val li
     VESC_BOARD("VESC board (Float package)", VehicleClass.ONEWHEEL, LinkKind.VESC,
         VehiclePreset(packWh = 576.0, usableFraction = 0.9, weightKg = 16.0, topSpeedMph = 22.0, ratedRangeMi = 28.0, defaultWhPerMi = 19.0,
             crr = OW_CRR, cdA = OW_CDA, cruiseMps = OW_CRUISE, regenRecovery = OW_REGEN, wheelDiameterMm = OW_WHEEL_MM,
-            motorPolePairs = 15, cellsSeries = 20)),
+            motorPolePairs = 15, cellsSeries = 20, gearRatio = 1.0)),
+    // ---- Other VESC builds (1.2.0). No single product is behind these, so the numbers are a typical DIY build
+    // (stated per line, all editable) and the physics constants follow the vehicle shape. Speed and distance prefer
+    // the controller's own COMM_GET_VALUES_SETUP figures (its configured wheel and gearing) when it answers that.
+    // VESC e-scooter: 16s (59 V nominal) 15 Ah = 888 Wh, 30 kg, 10" tyres (254 mm) on a 15 pole-pair hub motor
+    // (30 magnets, the common 10" scooter hub); upright rider like any kick scooter (CdA 0.55), cruise ~20 mph.
+    VESC_SCOOTER("VESC e-scooter", VehicleClass.KICK_SCOOTER, LinkKind.VESC,
+        VehiclePreset(packWh = 888.0, weightKg = 30.0, topSpeedMph = 35.0, ratedRangeMi = 40.0, defaultWhPerMi = 25.0,
+            crr = 0.015, cdA = 0.55, cruiseMps = 9.0, regenRecovery = 0.30, wheelDiameterMm = 254.0,
+            motorPolePairs = 15, cellsSeries = 16, gearRatio = 1.0)),
+    // VESC e-bike: 14s (52 V) 17.5 Ah = 907 Wh, 28 kg, 27.5" x 2.4 tyre (~700 mm), direct-drive hub (23 pole pairs).
+    // Bicycle tyres roll easily (crr ~0.008) and the rider sits (CdA ~0.5); little regen. A geared hub or mid-drive
+    // needs its gear ratio (or the controller's own speed settings).
+    VESC_EBIKE("VESC e-bike", VehicleClass.E_BIKE, LinkKind.VESC,
+        VehiclePreset(packWh = 907.0, weightKg = 28.0, topSpeedMph = 28.0, ratedRangeMi = 40.0, defaultWhPerMi = 20.0,
+            crr = 0.008, cdA = 0.50, cruiseMps = 8.0, regenRecovery = 0.10, wheelDiameterMm = 700.0,
+            motorPolePairs = 23, cellsSeries = 14, gearRatio = 1.0)),
+    // VESC e-skateboard, one motor: 10s3p 21700 (36 V x 12 Ah = 432 Wh), 8 kg, 90 mm urethane wheels (crr ~0.02 on
+    // asphalt), 14-pole outrunner (7 pole pairs) on a 16:36 belt (2.25), standing rider (CdA 0.6), cruise ~14 mph.
+    VESC_ESKATE("VESC e-skateboard (single motor)", VehicleClass.E_SKATEBOARD, LinkKind.VESC,
+        VehiclePreset(packWh = 432.0, usableFraction = 0.9, weightKg = 8.0, topSpeedMph = 22.0, ratedRangeMi = 16.0, defaultWhPerMi = 14.0,
+            crr = 0.020, cdA = 0.60, cruiseMps = 6.3, regenRecovery = 0.35, wheelDiameterMm = 90.0,
+            motorPolePairs = 7, cellsSeries = 10, gearRatio = 2.25)),
+    // VESC e-skateboard, two motors (two controllers on CAN): 12s4p 21700 (44 V x 16 Ah = 710 Wh), 11 kg, 97 mm wheels,
+    // same drivetrain per side. Power is the sum of both controllers.
+    VESC_ESKATE_DUAL("VESC e-skateboard (dual motor)", VehicleClass.E_SKATEBOARD, LinkKind.VESC,
+        VehiclePreset(packWh = 710.0, usableFraction = 0.9, weightKg = 11.0, topSpeedMph = 28.0, ratedRangeMi = 22.0, defaultWhPerMi = 16.0,
+            crr = 0.020, cdA = 0.60, cruiseMps = 7.0, regenRecovery = 0.35, wheelDiameterMm = 97.0,
+            motorPolePairs = 7, cellsSeries = 12, gearRatio = 2.25, motors = 2)),
     // Anything else: no connection, GPS speed and the battery slider.
     GENERIC("Other vehicle (manual)", VehicleClass.OTHER, LinkKind.NONE,
         VehiclePreset(packWh = 500.0, weightKg = 20.0, topSpeedMph = 20.0, ratedRangeMi = 25.0, defaultWhPerMi = 18.0));
@@ -138,6 +172,7 @@ data class Vehicle(
     val wheelDiameterMm: Double? = type.preset.wheelDiameterMm,
     val motorPolePairs: Int? = type.preset.motorPolePairs,
     val cellsSeries: Int? = type.preset.cellsSeries,
+    val gearRatio: Double? = type.preset.gearRatio,
     val model: ModelSnapshot? = null,
     val createdMs: Long = 0,
 ) {
@@ -185,7 +220,9 @@ object Garage {
         v.defaultWhPerMi !in 3.0..100.0 -> "Starting use should be 3–100 Wh/mi."
         v.type.link == LinkKind.VESC && (v.cellsSeries ?: 0) !in 6..36 -> "Cells in series should be 6–36."
         v.type.link == LinkKind.VESC && (v.motorPolePairs ?: 0) !in 1..60 -> "Pole pairs should be 1–60."
-        (v.type.link == LinkKind.VESC || v.type.link == LinkKind.FUTURE_MOTION) && (v.wheelDiameterMm ?: 0.0) !in 100.0..800.0 -> "Tyre diameter should be 100–800 mm."
+        v.type.link == LinkKind.VESC && (v.gearRatio ?: 1.0) !in 0.2..20.0 -> "Gear ratio should be 0.2–20 (1 for a hub motor)."
+        v.type.link == LinkKind.VESC && (v.wheelDiameterMm ?: 0.0) !in 50.0..800.0 -> "Wheel diameter should be 50–800 mm."
+        v.type.link == LinkKind.FUTURE_MOTION && (v.wheelDiameterMm ?: 0.0) !in 100.0..800.0 -> "Tyre diameter should be 100–800 mm."
         else -> null
     }
 }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ElectricBike
 import androidx.compose.material.icons.filled.ElectricScooter
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Skateboarding
@@ -59,6 +60,8 @@ data class EditorState(val vehicle: Vehicle, val isNew: Boolean, val pickingType
 fun VehicleClass.icon(): ImageVector = when (this) {
     VehicleClass.KICK_SCOOTER -> Icons.Filled.ElectricScooter
     VehicleClass.ONEWHEEL -> Icons.Filled.Skateboarding
+    VehicleClass.E_SKATEBOARD -> Icons.Filled.Skateboarding
+    VehicleClass.E_BIKE -> Icons.Filled.ElectricBike
     VehicleClass.OTHER -> Icons.Filled.Settings
 }
 
@@ -176,14 +179,17 @@ fun VehicleEditor(vm: MainViewModel, e: EditorState) {
                 Muted("Starting use is the flat-ground consumption before RideRange has learned from your rides.")
             }
             if (v.type.link == LinkKind.FUTURE_MOTION || v.type.link == LinkKind.VESC) item {
-                NumField("Tyre diameter", v.wheelDiameterMm, "mm", modifier = Modifier.fillMaxWidth()) { x -> v = v.copy(wheelDiameterMm = x) }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    NumField("Wheel diameter", v.wheelDiameterMm, "mm", modifier = Modifier.weight(1f)) { x -> v = v.copy(wheelDiameterMm = x) }
+                    if (v.type.link == LinkKind.VESC) NumField("Gear ratio", v.gearRatio, ":1", 2, Modifier.weight(1f)) { x -> v = v.copy(gearRatio = x) }
+                }
             }
             if (v.type.link == LinkKind.VESC) item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     NumField("Cells in series", v.cellsSeries?.toDouble(), "s", modifier = Modifier.weight(1f)) { x -> v = v.copy(cellsSeries = x?.toInt()) }
                     NumField("Motor pole pairs", v.motorPolePairs?.toDouble(), "", modifier = Modifier.weight(1f)) { x -> v = v.copy(motorPolePairs = x?.toInt()) }
                 }
-                Muted("Battery % is estimated from pack voltage ÷ cells; speed and distance from the motor's electrical RPM ÷ pole pairs and the tyre size.")
+                Muted("Used only when the controller doesn't report them itself: battery % from pack voltage ÷ cells (a VESC BMS or the controller's own battery level wins), speed and distance from electrical RPM ÷ pole pairs ÷ gear ratio and the wheel size (the controller's configured speed wins). Gear ratio = motor turns per wheel turn: 1 for a hub motor, wheel pulley ÷ motor pulley teeth for a belt drive.")
             }
             item {
                 error?.let { Text(it, color = RideColors.Red) }

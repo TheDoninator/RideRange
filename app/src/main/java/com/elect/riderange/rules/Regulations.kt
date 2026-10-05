@@ -59,6 +59,8 @@ class Regulations(
     /** Which device class heads the Rules tab for the active vehicle. */
     fun primaryFor(vehicle: com.elect.riderange.vehicle.VehicleClass): String = when (vehicle) {
         com.elect.riderange.vehicle.VehicleClass.ONEWHEEL -> "boards"
+        com.elect.riderange.vehicle.VehicleClass.E_BIKE -> "ebike"
+        com.elect.riderange.vehicle.VehicleClass.E_SKATEBOARD -> "eskate"
         else -> "scooter"
     }
 

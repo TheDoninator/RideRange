@@ -149,6 +149,8 @@ object RoutePlans {
     /** One-wheel board variants: dirt trails and unpaved surfaces are fine, steps are still excluded. */
     const val OW_TRAILS = "@ow-trails"
     const val OW_TRAFFIC = "@ow-traffic"
+    const val ES_TRAILS = "@es-trails"
+    const val ES_TRAFFIC = "@es-traffic"
 
     /** Bundled profile file for a custom profile name. */
     fun asset(profile: String): String? = when (profile) {
@@ -156,20 +158,27 @@ object RoutePlans {
         TRAFFIC -> "brouter/scooter-traffic.brf"
         OW_TRAILS -> "brouter/onewheel-trails.brf"
         OW_TRAFFIC -> "brouter/onewheel-traffic.brf"
+        ES_TRAILS -> "brouter/eskate-trails.brf"
+        ES_TRAFFIC -> "brouter/eskate-traffic.brf"
         else -> null
     }
 
     /** Built-in BRouter profile used when the custom profile can't be uploaded. */
     fun fallback(profile: String): String = when (profile) {
-        TRAILS, OW_TRAILS -> "trekking"
-        TRAFFIC, OW_TRAFFIC -> "safety"
+        TRAILS, OW_TRAILS, ES_TRAILS -> "trekking"
+        TRAFFIC, OW_TRAFFIC, ES_TRAFFIC -> "safety"
         else -> profile
     }
 
     fun requests(mode: RouteMode, vehicle: VehicleClass = VehicleClass.KICK_SCOOTER): List<Request> {
-        val ow = vehicle == VehicleClass.ONEWHEEL
-        val trails = if (ow) OW_TRAILS else TRAILS
-        val traffic = if (ow) OW_TRAFFIC else TRAFFIC
+        // One-wheel boards: dirt is fine. E-skateboards: small hard wheels, paved only. E-bikes: BRouter's own bike
+        // profiles (they handle gravel). Scooters and everything else: the scooter profiles.
+        val (trails, traffic) = when (vehicle) {
+            VehicleClass.ONEWHEEL -> OW_TRAILS to OW_TRAFFIC
+            VehicleClass.E_SKATEBOARD -> ES_TRAILS to ES_TRAFFIC
+            VehicleClass.E_BIKE -> "trekking" to "safety"
+            else -> TRAILS to TRAFFIC
+        }
         return when (mode) {
             RouteMode.TRAILS -> listOf(Request(trails, 0))
             RouteMode.TRAFFIC -> listOf(Request(traffic, 0))
