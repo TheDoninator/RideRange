@@ -14,7 +14,7 @@ import kotlin.math.PI
 class VescProtocolTest {
     @Test fun crc16XmodemCheckValue() {
         // The CRC-16/XMODEM catalogue check value: crc("123456789") = 0x31C3.
-        assertEquals(0x31C3, VescProtocol.crc16("123456789".toByteArray()))
+        assertEquals(0x31C3, VescProtocol.crc16("123456789".encodeToByteArray()))
         assertEquals(0, VescProtocol.crc16(ByteArray(0)))
     }
 
@@ -24,9 +24,8 @@ class VescProtocolTest {
         assertEquals("020100000003", VescProtocol.request(VescProtocol.COMM_FW_VERSION).toHex())
     }
 
-    @Test(expected = IllegalArgumentException::class)
-    fun refusesAnythingButReads() {
-        VescProtocol.request(5)   // COMM_SET_DUTY: never allowed
+    @Test fun refusesAnythingButReads() {
+        kotlin.test.assertFailsWith<IllegalArgumentException> { VescProtocol.request(5) }   // COMM_SET_DUTY: never allowed
     }
 
     @Test fun readOnlyWhitelistHasOnlyReads() {

@@ -64,8 +64,8 @@ class NbCryptoTest {
 
     @Test
     fun roundTripBothDirections() {
-        val a = NbCrypto().apply { setName("NBScooter1".toByteArray()) }
-        val b = NbCrypto().apply { setName("NBScooter1".toByteArray()) }
+        val a = NbCrypto().apply { setName("NBScooter1".encodeToByteArray()) }
+        val b = NbCrypto().apply { setName("NBScooter1".encodeToByteArray()) }
         val p = NbPacket(Nb.PC, Nb.BLE, Nb.INIT, 0).pack()
         assertEquals(p.toHex(), b.decrypt(a.encrypt(p)).toHex())
         val ble = ByteArray(16) { it.toByte() }
