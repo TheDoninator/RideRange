@@ -73,7 +73,7 @@ final class MapLibreMap: NSObject, NativeMapView, MLNMapViewDelegate {
         map.setCamera(cam, withDuration: 0.7, animationTimingFunction: nil)
     }
 
-    func setPadding(top: Double, bottom: Double) {
+    func setInsets(top: Double, bottom: Double) {
         map.setContentInset(UIEdgeInsets(top: top, left: 0, bottom: bottom, right: 0), animated: false, completionHandler: nil)
     }
 

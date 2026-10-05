@@ -21,7 +21,7 @@ interface NativeMapView {
     /** NaN = keep the current zoom / bearing. */
     fun moveTo(lat: Double, lon: Double, zoom: Double, bearing: Double, animate: Boolean)
     fun fitBounds(south: Double, west: Double, north: Double, east: Double, top: Double, left: Double, bottom: Double, right: Double)
-    fun setPadding(top: Double, bottom: Double)
+    fun setInsets(top: Double, bottom: Double)
     fun visibleSouth(): Double
     fun visibleWest(): Double
     fun visibleNorth(): Double
@@ -107,7 +107,7 @@ class IosMapSurface(private val map: NativeMapView) : MapSurface {
         map.fitBounds(pts.minOf { it.lat }, pts.minOf { it.lon }, pts.maxOf { it.lat }, pts.maxOf { it.lon }, pt(top), pt(side), pt(bottom), pt(side))
     }
 
-    override fun setPadding(top: Int, bottom: Int) = map.setPadding(pt(top), pt(bottom))
+    override fun setPadding(top: Int, bottom: Int) = map.setInsets(pt(top), pt(bottom))
 
     override fun visibleBounds(): DoubleArray = doubleArrayOf(map.visibleSouth(), map.visibleWest(), map.visibleNorth(), map.visibleEast())
 

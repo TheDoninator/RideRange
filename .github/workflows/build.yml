@@ -77,12 +77,13 @@ jobs:
           cd iosApp && xcodegen
       - name: Build for iPhone (unsigned)
         run: |
+          set -o pipefail
           cd iosApp
           xcodebuild -project RideRange.xcodeproj -scheme RideRange -configuration Release \
             -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
             MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -n 60
-          test -d build/Build/Products/Release-iphoneos/RideRange.app
+          test -f build/Build/Products/Release-iphoneos/RideRange.app/RideRange
       - name: Package the .ipa
         run: |
           cd iosApp
@@ -140,12 +141,13 @@ jobs:
           if-no-files-found: ignore
       - name: Build for the simulator
         run: |
+          set -o pipefail
           brew install xcodegen
           cd iosApp && xcodegen
           xcodebuild -project RideRange.xcodeproj -scheme RideRange -configuration Debug \
-            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO build | tail -n 60
-          test -d build/Build/Products/Debug-iphonesimulator/RideRange.app
+            -sdk iphonesimulator -destination "id=$SIM_UDID" -derivedDataPath build \
+            ARCHS=arm64 ONLY_ACTIVE_ARCH=YES CODE_SIGNING_ALLOWED=NO build | tail -n 60
+          test -f build/Build/Products/Debug-iphonesimulator/RideRange.app/RideRange
       - name: Screenshots in St. George, UT
         run: |
           set -x
