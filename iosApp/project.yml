@@ -1,0 +1,44 @@
+# XcodeGen spec for the iPhone app (CI runs `xcodegen` in this folder; nothing generated is committed).
+# The shared Kotlin code comes in as the static framework "Shared" built by Gradle:
+#   device:    ./gradlew :shared:linkReleaseFrameworkIosArm64
+#   simulator: ./gradlew :shared:linkDebugFrameworkIosSimulatorArm64
+name: RideRange
+options:
+  bundleIdPrefix: io.github.thedoninator
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+packages:
+  MapLibre:
+    url: https://github.com/maplibre/maplibre-gl-native-distribution
+    exactVersion: 6.31.0
+settings:
+  base:
+    MARKETING_VERSION: "2.0.0"
+    CURRENT_PROJECT_VERSION: "8"
+targets:
+  RideRange:
+    type: application
+    platform: iOS
+    sources:
+      - path: iosApp
+      # The same bundled data as Android (regulations.json, BRouter profiles), as an "assets" folder in the app.
+      - path: ../app/src/main/assets
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: MapLibre
+        product: MapLibre
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: io.github.thedoninator.riderange
+        PRODUCT_NAME: RideRange
+        INFOPLIST_FILE: iosApp/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+        "FRAMEWORK_SEARCH_PATHS[sdk=iphoneos*]": $(SRCROOT)/../shared/build/bin/iosArm64/releaseFramework
+        "FRAMEWORK_SEARCH_PATHS[sdk=iphonesimulator*]": $(SRCROOT)/../shared/build/bin/iosSimulatorArm64/debugFramework
+        OTHER_LDFLAGS: ["$(inherited)", "-framework", "Shared"]

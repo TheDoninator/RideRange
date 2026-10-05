@@ -118,3 +118,8 @@ val genTestPaths by tasks.registering {
 tasks.matching { it.name.startsWith("compile") || it.name.startsWith("ksp") }.configureEach {
     dependsOn(genAppInfo, genTestPaths)
 }
+
+// CI picks a simulator that exists on the runner's Xcode (IOS_SIM_DEVICE, e.g. "iPhone 17").
+tasks.withType<org.jetbrains.kotlin.gradle.targets.native.tasks.KotlinNativeSimulatorTest>().configureEach {
+    providers.environmentVariable("IOS_SIM_DEVICE").orNull?.let { device.set(it) }
+}
