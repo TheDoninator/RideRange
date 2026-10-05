@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -9,7 +11,8 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        applicationId = "com.elect.riderange"
+        // Permanent public app id (Android only lets an install update from the same id + signing key).
+        applicationId = "io.github.thedoninator.riderange"
         minSdk = 26
         targetSdk = 36
         versionCode = 7
@@ -18,12 +21,35 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
+    // Release signing: local.properties (never committed) may point "riderange.signing" at a properties file
+    // with storeFile, storePassword, keyAlias and keyPassword. Without it, release builds are debug-signed.
+    val signingProps = rootProject.file("local.properties").takeIf { it.exists() }
+        ?.let { f -> Properties().apply { f.inputStream().use { load(it) } } }
+        ?.getProperty("riderange.signing")
+        ?.let { path -> file(path).takeIf { it.exists() } }
+        ?.let { f -> Properties().apply { f.inputStream().use { load(it) } } }
+
+    signingConfigs {
+        if (signingProps != null) {
+            create("release") {
+                storeFile = file(signingProps.getProperty("storeFile"))
+                storePassword = signingProps.getProperty("storePassword")
+                keyAlias = signingProps.getProperty("keyAlias")
+                keyPassword = signingProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            // Debug builds install next to the published release instead of clashing with its signature.
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"))
-            // Debug-signed so the release APK installs without a keystore; use a real key before publishing.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 
