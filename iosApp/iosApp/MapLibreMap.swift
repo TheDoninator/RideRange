@@ -32,6 +32,8 @@ final class MapLibreMap: NSObject, NativeMapView, MLNMapViewDelegate {
         map.logoView.isHidden = true
         map.showsUserLocation = false
         map.isPitchEnabled = false
+        // RideRange sets the insets for its panels itself.
+        map.automaticallyAdjustsContentInset = false
         map.setCenter(CLLocationCoordinate2D(latitude: lat, longitude: lon), zoomLevel: zoom, animated: false)
 
         let long = UILongPressGestureRecognizer(target: self, action: #selector(onLongPress(_:)))
@@ -67,10 +69,24 @@ final class MapLibreMap: NSObject, NativeMapView, MLNMapViewDelegate {
     }
 
     func fitBounds(south: Double, west: Double, north: Double, east: Double, top: Double, left: Double, bottom: Double, right: Double) {
+        // Not laid out yet: try again on the next run loop turns (Compose adds the view before its first layout).
+        if map.bounds.height < 100 || map.bounds.width < 100 {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+                self?.fitBounds(south: south, west: west, north: north, east: east, top: top, left: left, bottom: bottom, right: right)
+            }
+            return
+        }
         let b = MLNCoordinateBounds(sw: CLLocationCoordinate2D(latitude: south, longitude: west),
                                     ne: CLLocationCoordinate2D(latitude: north, longitude: east))
-        let cam = map.cameraThatFitsCoordinateBounds(b, edgePadding: UIEdgeInsets(top: top, left: left, bottom: bottom, right: right))
-        map.setCamera(cam, withDuration: 0.7, animationTimingFunction: nil)
+        // The edge padding comes on top of the content inset (the panels); keep at least a 120 pt window for the shape.
+        let inset = map.contentInset
+        let h = map.bounds.height, w = map.bounds.width
+        var t = top, bt = bottom, l = left, r = right
+        let freeV = h - inset.top - inset.bottom - t - bt
+        if freeV < 120 { let k = max(0, (h - inset.top - inset.bottom - 120) / max(1, t + bt)); t *= k; bt *= k }
+        let freeH = w - l - r
+        if freeH < 120 { let k = max(0, (w - 120) / max(1, l + r)); l *= k; r *= k }
+        map.setVisibleCoordinateBounds(b, edgePadding: UIEdgeInsets(top: t, left: l, bottom: bt, right: r), animated: true, completionHandler: nil)
     }
 
     func setInsets(top: Double, bottom: Double) {
