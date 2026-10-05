@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Debug builds show up as "RideRange Dev" next to the installed release. -->
+    <string name="app_name">RideRange Dev</string>
+</resources>
