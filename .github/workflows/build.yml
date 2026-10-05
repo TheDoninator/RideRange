@@ -1,0 +1,181 @@
+name: Build
+
+# Android: unit tests + debug APK. iPhone: shared tests on the iOS simulator, an unsigned .ipa for sideloading,
+# and simulator screenshots of every tab. No signing secrets are used anywhere.
+on:
+  push:
+    branches: [main, ios]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  GRADLE_OPTS: -Dorg.gradle.daemon=false
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+      - name: Unit tests and debug APK
+        run: ./gradlew :shared:testAndroidHostTest :app:testDebugUnitTest :app:assembleDebug --stacktrace
+      - name: Test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-reports
+          path: |
+            shared/build/reports/tests/
+            app/build/reports/tests/
+          if-no-files-found: ignore
+      - name: Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RideRange-android-debug
+          path: app/build/outputs/apk/debug/*.apk
+
+  ios-device:
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+      - uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+      - name: Version
+        run: |
+          echo "VERSION=$(grep '^riderange.versionName=' gradle.properties | cut -d= -f2)" >> "$GITHUB_ENV"
+          echo "BUILD=$(grep '^riderange.versionCode=' gradle.properties | cut -d= -f2)" >> "$GITHUB_ENV"
+      - name: Shared framework (release, arm64)
+        run: ./gradlew :shared:linkReleaseFrameworkIosArm64 --stacktrace
+      - name: Xcode project
+        run: |
+          brew install xcodegen
+          cd iosApp && xcodegen
+      - name: Build for iPhone (unsigned)
+        run: |
+          cd iosApp
+          xcodebuild -project RideRange.xcodeproj -scheme RideRange -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build | tail -n 60
+          test -d build/Build/Products/Release-iphoneos/RideRange.app
+      - name: Package the .ipa
+        run: |
+          cd iosApp
+          rm -rf Payload && mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/RideRange.app Payload/
+          zip -qry "RideRange-$VERSION.ipa" Payload
+          ls -l "RideRange-$VERSION.ipa"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' -c 'Print :CFBundleShortVersionString' -c 'Print :CFBundleVersion' Payload/RideRange.app/Info.plist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RideRange-${{ env.VERSION }}-ipa
+          path: iosApp/RideRange-${{ env.VERSION }}.ipa
+          if-no-files-found: error
+
+  ios-simulator:
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          cache-read-only: false
+      - uses: actions/cache@v4
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: konan-${{ runner.os }}-
+      - name: Pick an iPhone simulator
+        run: |
+          UDID_NAME=$(xcrun simctl list devices available -j | python3 -c '
+          import json, sys
+          d = json.load(sys.stdin)["devices"]
+          ios = sorted([k for k in d if "iOS" in k], key=lambda k: [int(x) for x in k.split("iOS-")[-1].split("-")])
+          for rt in reversed(ios):
+              phones = [x for x in d[rt] if x["name"].startswith("iPhone") and "SE" not in x["name"]]
+              if phones:
+                  p = sorted(phones, key=lambda x: x["name"])[0]
+                  print(p["udid"] + "|" + p["name"]); break
+          ')
+          echo "SIM_UDID=${UDID_NAME%%|*}" >> "$GITHUB_ENV"
+          echo "IOS_SIM_DEVICE=${UDID_NAME#*|}" >> "$GITHUB_ENV"
+          echo "Simulator: $UDID_NAME"
+      - name: Shared tests on the iOS simulator + simulator framework
+        run: ./gradlew :shared:iosSimulatorArm64Test :shared:linkDebugFrameworkIosSimulatorArm64 --stacktrace
+      - name: iOS test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-reports
+          path: shared/build/reports/tests/
+          if-no-files-found: ignore
+      - name: Build for the simulator
+        run: |
+          brew install xcodegen
+          cd iosApp && xcodegen
+          xcodebuild -project RideRange.xcodeproj -scheme RideRange -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 60
+          test -d build/Build/Products/Debug-iphonesimulator/RideRange.app
+      - name: Screenshots in St. George, UT
+        run: |
+          set -x
+          APP=iosApp/build/Build/Products/Debug-iphonesimulator/RideRange.app
+          BID=io.github.thedoninator.riderange
+          mkdir -p screenshots
+          xcrun simctl boot "$SIM_UDID" || true
+          xcrun simctl bootstatus "$SIM_UDID" -b
+          xcrun simctl status_bar "$SIM_UDID" override --time 9:41 --batteryState charged --batteryLevel 100 || true
+          xcrun simctl location "$SIM_UDID" set 37.0965,-113.5684
+          xcrun simctl install "$SIM_UDID" "$APP"
+          xcrun simctl privacy "$SIM_UDID" grant location-always "$BID" || xcrun simctl privacy "$SIM_UDID" grant location "$BID" || true
+          shot() {
+            name=$1; wait=$2; shift 2
+            xcrun simctl terminate "$SIM_UDID" "$BID" || true
+            xcrun simctl launch "$SIM_UDID" "$BID" -rrDemo "$@"
+            sleep "$wait"
+            xcrun simctl io "$SIM_UDID" screenshot "screenshots/$name.png"
+          }
+          shot 01-ride 25 -rrTab RIDE
+          shot 02-route 40 -rrDest 37.1041,-113.5841
+          shot 03-parking 30 -rrTab PARKING
+          shot 04-rules 25 -rrTab RULES
+          shot 05-vehicle 15 -rrTab SCOOTER
+          xcrun simctl spawn "$SIM_UDID" log show --last 10m --predicate 'process == "RideRange"' --style compact > screenshots/app-log.txt 2>&1 || true
+          xcrun simctl terminate "$SIM_UDID" "$BID" || true
+          ls -l screenshots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ios-simulator-screenshots
+          path: screenshots/
+          if-no-files-found: warn
