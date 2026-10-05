@@ -82,6 +82,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
+import com.elect.riderange.vehicle.vesc.VescSimulator
 import java.util.Locale
 
 /** The Vehicle tab: Garage · Connect · Trips · Settings. */
@@ -229,7 +230,7 @@ private fun LazyListScope.connectSection(vm: MainViewModel, requestBluetooth: ()
             Muted(when (v.type.link) {
                 LinkKind.NINEBOT -> "Read-only: RideRange never changes scooter settings. The scooter accepts one Bluetooth connection at a time, so close the Segway app and Ninebot Bridge first."
                 LinkKind.FUTURE_MOTION -> "Read-only. Live data works only on boards whose firmware shares it with other apps (Onewheel V1 / Onewheel+ before the 2018 \"Gemini\" update). Newer firmware (Gemini, Pint, XR hardware 4210+, GT) needs Future Motion's own authentication, which RideRange doesn't get around: those boards run in manual mode (GPS speed, battery slider)."
-                LinkKind.VESC -> "Read-only: only asks for the firmware version and live values, never motor or configuration commands. Close VESC Tool / Float Control first. Set cells in series, motor pole pairs and tyre size in the vehicle's settings."
+                LinkKind.VESC -> "Read-only: only asks for values (firmware, live values, other controllers on CAN, a VESC BMS, Float package data), never motor, configuration, firmware or package commands. Close VESC Tool / Float Control first. Cells, pole pairs, gear ratio and wheel size in the vehicle's settings are used only where the controller doesn't report speed or battery itself."
                 LinkKind.NONE -> ""
             })
             Spacer(Modifier.height(8.dp))
@@ -243,6 +244,14 @@ private fun LazyListScope.connectSection(vm: MainViewModel, requestBluetooth: ()
                             Text("Connect ${settings.lastScooterName ?: addr}", maxLines = 1)
                         }
                     }
+                }
+            }
+            if (v.type.link == LinkKind.VESC && VescSimulator.available && st.phase != ScooterPhase.CONNECTED) {
+                Spacer(Modifier.height(6.dp))
+                Muted("Debug build only: a simulated VESC (fake bytes through the real decoder), for testing without a board.")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(onClick = { s.scooter.connect(VescSimulator.FLOAT_BOARD, "Simulated Float board") }) { Text("Sim: Float board", maxLines = 1) }
+                    OutlinedButton(onClick = { s.scooter.connect(VescSimulator.DUAL_MOTOR, "Simulated dual motor") }) { Text("Sim: dual motor", maxLines = 1) }
                 }
             }
             if (st.phase != ScooterPhase.CONNECTED) found.filter { it.ninebot || it.name != null }.take(8).forEach { f ->
@@ -272,6 +281,7 @@ private fun LazyListScope.connectSection(vm: MainViewModel, requestBluetooth: ()
             }
         }
     }
+    item { VescDetails(vm) }
     item {
         val s = vm.s
         val settings by s.ride.settings.collectAsStateWithLifecycle()
@@ -438,6 +448,11 @@ private fun LazyListScope.settingsSection(vm: MainViewModel) {
             SwitchRow("Record trips automatically", st.autoTrips) { x -> scope.launch { s.settings.update { it.copy(autoTrips = x) } } }
             SwitchRow("Voice directions", !st.voiceMuted) { x -> scope.launch { s.settings.update { it.copy(voiceMuted = !x) } } }
             SwitchRow("Bike parking on the Ride map", st.showParkingOnRide) { x -> scope.launch { s.settings.update { it.copy(showParkingOnRide = x) } } }
+            if (st.vehicle?.type?.link == LinkKind.VESC) {
+                SwitchRow("Pushback / duty alerts (vibrate + voice)", st.rideAlerts) { x -> scope.launch { s.settings.update { it.copy(rideAlerts = x) } } }
+                NumberSetting("Duty alert at", st.dutyAlertPct.toDouble(), "%", 1.0, 50.0, 100.0) { x -> scope.launch { s.settings.update { it.copy(dutyAlertPct = x.toInt()) } } }
+                Muted("VESC vehicles: the Float package's pushback (duty, voltage, temperature) and a duty cycle above this level vibrate the phone and are spoken, at most every few seconds. The mute button on the Ride tab's Float panel switches this off too.")
+            }
         }
     }
     item { ServersSection(vm) }

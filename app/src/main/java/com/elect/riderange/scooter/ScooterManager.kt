@@ -37,6 +37,10 @@ data class ScooterState(
     val manualMode: Boolean = false,
     /** Board firmware revision, when the link reads one (Onewheel / VESC). */
     val firmware: String? = null,
+    /** VESC only: everything read so far (controllers incl. CAN, setup values, BMS, Float package). */
+    val vesc: com.elect.riderange.vehicle.vesc.VescSnapshot? = null,
+    /** Where [Telemetry.batteryPct] came from, when the link knows ("VESC BMS", "controller", "pack voltage"). */
+    val batterySource: String? = null,
 )
 
 /**

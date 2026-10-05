@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.elect.riderange.core.ServiceUrls
@@ -60,6 +61,10 @@ data class AppSettings(
     val urls: ServiceUrls = ServiceUrls(),
     /** owner/repo whose GitHub releases are checked for a newer version (blank = never check). */
     val updateRepo: String = "",
+    /** VESC: vibrate + speak on pushback / high duty cycle (the mute button on the Float panel turns this off). */
+    val rideAlerts: Boolean = true,
+    /** VESC: duty cycle (%) that triggers the "high duty" alert. */
+    val dutyAlertPct: Int = 85,
 ) {
     val vehicle: Vehicle? get() = Garage.active(vehicles, activeVehicleId)
     val vehicleKg: Double get() = vehicle?.weightKg ?: MassEstimator.SCOOTER_KG
@@ -112,6 +117,8 @@ class SettingsStore(private val context: Context) {
         val U_METEO = stringPreferencesKey("url_open_meteo")
         val U_STYLE = stringPreferencesKey("url_map_style")
         val UPDATE_REPO = stringPreferencesKey("update_repo")
+        val RIDE_ALERTS = booleanPreferencesKey("ride_alerts")
+        val DUTY_ALERT = intPreferencesKey("duty_alert_pct")
     }
 
     val settings: Flow<AppSettings> = context.store.data.map { p ->
@@ -139,6 +146,8 @@ class SettingsStore(private val context: Context) {
             activeVehicleId = active?.id,
             urls = ServiceUrls(p[K.U_BROUTER] ?: "", p[K.U_NOMINATIM] ?: "", p[K.U_OVERPASS] ?: "", p[K.U_METEO] ?: "", p[K.U_STYLE] ?: ""),
             updateRepo = p[K.UPDATE_REPO] ?: "",
+            rideAlerts = p[K.RIDE_ALERTS] ?: true,
+            dutyAlertPct = (p[K.DUTY_ALERT] ?: 85).coerceIn(50, 100),
         )
     }
 
@@ -163,6 +172,8 @@ class SettingsStore(private val context: Context) {
             p[K.U_BROUTER] = n.urls.brouter.trim(); p[K.U_NOMINATIM] = n.urls.nominatim.trim(); p[K.U_OVERPASS] = n.urls.overpass.trim()
             p[K.U_METEO] = n.urls.openMeteo.trim(); p[K.U_STYLE] = n.urls.mapStyle.trim()
             p[K.UPDATE_REPO] = n.updateRepo.trim()
+            p[K.RIDE_ALERTS] = n.rideAlerts
+            p[K.DUTY_ALERT] = n.dutyAlertPct.coerceIn(50, 100)
             // Range / Bluetooth edits go to the active vehicle (re-read so concurrent garage edits aren't lost).
             val list = VehicleJson.listFrom(p[K.GARAGE])
             val active = Garage.active(list, p[K.ACTIVE])

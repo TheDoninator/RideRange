@@ -67,6 +67,7 @@ class Services(val context: Context) {
     val rules = RulesRepository(context, nominatim, scope)
     val ride = RideHub(this)
     val nav = NavController(this)
+    val alerts = com.elect.riderange.service.RideAlerts(this)
 
     fun start() {
         MapLibre.getInstance(context)
@@ -76,6 +77,7 @@ class Services(val context: Context) {
             trips.migrateToGarage()
             ready.value = true
             ride.start()
+            alerts.start()
         }
     }
 

@@ -88,7 +88,7 @@ fun RideOverlay(vm: MainViewModel) {
                                 else -> Color(0xFF6B7C8A)
                             }, 10)
                             Spacer(Modifier.width(6.dp))
-                            Text(if (battery.fromScooter) "live" else if (scooter.manualMode || vehicle?.type?.link == com.elect.riderange.vehicle.LinkKind.NONE) "manual mode" else "set manually",
+                            Text(if (battery.fromScooter) (scooter.batterySource?.let { "live · $it" } ?: "live") else if (scooter.manualMode || vehicle?.type?.link == com.elect.riderange.vehicle.LinkKind.NONE) "manual mode" else "set manually",
                                 style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
@@ -128,6 +128,7 @@ fun RideOverlay(vm: MainViewModel) {
                     }
                 }
             }
+            VescRidePanel(vm)
         }
 
         Column(Modifier.align(Alignment.CenterEnd), verticalArrangement = Arrangement.spacedBy(10.dp)) {
