@@ -4,11 +4,11 @@ import com.elect.riderange.core.Http
 import com.elect.riderange.core.LatLon
 import com.elect.riderange.core.RateLimiter
 import com.elect.riderange.core.ServiceException
-import org.json.JSONArray
-import org.json.JSONObject
-import java.io.IOException
-import java.net.URLEncoder
-import java.util.Locale
+import com.elect.riderange.core.json.JSONArray
+import com.elect.riderange.core.json.JSONObject
+import com.elect.riderange.core.IOException
+import com.elect.riderange.core.Text
+import com.elect.riderange.core.format
 
 data class Place(val name: String, val detail: String, val pos: LatLon)
 
@@ -44,10 +44,10 @@ class NominatimClient(
     private val base: String get() = baseUrl()
     /** Places near the rider first (~80 km box); only if there are none, search the whole US. */
     suspend fun search(query: String, near: LatLon?): List<Place> {
-        val q = URLEncoder.encode(query.trim(), "UTF-8")
+        val q = Text.urlEncode(query.trim())
         val root = "$base/search?q=$q&format=jsonv2&limit=8&addressdetails=0&countrycodes=us"
         if (near != null) {
-            val box = String.format(Locale.US, "&viewbox=%.4f,%.4f,%.4f,%.4f&bounded=1", near.lon - 0.9, near.lat + 0.7, near.lon + 0.9, near.lat - 0.7)
+            val box = "&viewbox=%.4f,%.4f,%.4f,%.4f&bounded=1".format( near.lon - 0.9, near.lat + 0.7, near.lon + 0.9, near.lat - 0.7)
             val local = NominatimParser.parseSearch(call(root + box))
             if (local.isNotEmpty()) return local
         }
@@ -55,7 +55,7 @@ class NominatimClient(
     }
 
     suspend fun reverse(p: LatLon): Region {
-        val url = String.format(Locale.US, "%s/reverse?lat=%.5f&lon=%.5f&format=jsonv2&zoom=12&addressdetails=1", base, p.lat, p.lon)
+        val url = "%s/reverse?lat=%.5f&lon=%.5f&format=jsonv2&zoom=12&addressdetails=1".format( base, p.lat, p.lon)
         return NominatimParser.parseReverse(call(url))
     }
 

@@ -1,5 +1,7 @@
 package com.elect.riderange.vehicle.vesc
 
+import com.elect.riderange.core.format
+
 /** A warning worth telling the rider about while riding a VESC vehicle. Ordered by priority (first = most urgent). */
 enum class RideWarning(val label: String, val speech: String, val vibration: LongArray) {
     PUSHBACK_DUTY("Pushback: duty cycle", "Pushback. Duty cycle.", longArrayOf(0, 400, 150, 400, 150, 400)),

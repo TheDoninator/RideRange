@@ -26,6 +26,7 @@ import com.elect.riderange.vehicle.VehicleType
 import com.elect.riderange.vehicle.onewheel.FmAccess
 import com.elect.riderange.vehicle.onewheel.FmParse
 import com.elect.riderange.vehicle.onewheel.FmUuids
+import com.elect.riderange.androidBluetoothPermitted
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -67,7 +68,7 @@ class FmManager(
     private var scanning = false
 
     private fun ready(): Boolean {
-        if (!bluetoothPermitted(context)) {
+        if (!androidBluetoothPermitted(context)) {
             _state.update { it.copy(phase = ScooterPhase.ERROR, message = "Allow \"Nearby devices\" so the app can reach the board.") }
             return false
         }
@@ -87,7 +88,7 @@ class FmManager(
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val name = result.scanRecord?.deviceName ?: try { result.device.name } catch (_: SecurityException) { null }
             val uuids = result.scanRecord?.serviceUuids?.map { it.uuid } ?: emptyList()
-            val ow = name?.lowercase()?.startsWith("ow") == true || FmUuids.SERVICE in uuids
+            val ow = name?.lowercase()?.startsWith("ow") == true || FmUuids.SERVICE in uuids.map { it.toString() }
             val d = FoundScooter(result.device.address, name, result.rssi, ow)
             _found.update { list ->
                 val i = list.indexOfFirst { it.address == d.address }
@@ -157,14 +158,14 @@ class FmManager(
 
     private fun opDone() { busy = false; pump() }
 
-    private fun read(svc: android.bluetooth.BluetoothGattService, uuid: UUID) = enqueue { g ->
-        svc.getCharacteristic(uuid)?.let { g.readCharacteristic(it) } ?: false
+    private fun read(svc: android.bluetooth.BluetoothGattService, uuid: String) = enqueue { g ->
+        svc.getCharacteristic(UUID.fromString(uuid))?.let { g.readCharacteristic(it) } ?: false
     }
 
-    private fun subscribe(svc: android.bluetooth.BluetoothGattService, uuid: UUID) = enqueue { g ->
-        val c = svc.getCharacteristic(uuid) ?: return@enqueue false
+    private fun subscribe(svc: android.bluetooth.BluetoothGattService, uuid: String) = enqueue { g ->
+        val c = svc.getCharacteristic(UUID.fromString(uuid)) ?: return@enqueue false
         g.setCharacteristicNotification(c, true)
-        val d = c.getDescriptor(FmUuids.CCCD) ?: return@enqueue false
+        val d = c.getDescriptor(UUID.fromString(FmUuids.CCCD)) ?: return@enqueue false
         // Enabling notifications writes the standard CCCD descriptor; no board characteristic is ever written.
         if (Build.VERSION.SDK_INT >= 33) g.writeDescriptor(d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE) == BluetoothGatt.GATT_SUCCESS
         else {
@@ -172,7 +173,7 @@ class FmManager(
         }
     }
 
-    private fun onValue(uuid: UUID, value: ByteArray) {
+    private fun onValue(uuid: String, value: ByteArray) {
         when (uuid) {
             FmUuids.FIRMWARE -> firmware = FmParse.firmware(value)
             FmUuids.HARDWARE -> {
@@ -182,7 +183,7 @@ class FmManager(
             else -> {
                 val v = vehicle.value
                 telemetry = FmParse.apply(telemetry, uuid, value, v?.wheelDiameterMm ?: FmParse.DEFAULT_WHEEL_MM,
-                    plusHardware = v?.type == VehicleType.ONEWHEEL_PLUS, nowMs = System.currentTimeMillis())
+                    plusHardware = v?.type == VehicleType.ONEWHEEL_PLUS, nowMs = com.elect.riderange.core.currentTimeMillis())
                 _state.update { it.copy(telemetry = telemetry) }
             }
         }
@@ -193,7 +194,7 @@ class FmManager(
         val fw = firmware
         val access = FmAccess.decide(fw, hardware)
         _state.update { it.copy(firmware = fw?.toString()) }
-        val svc = gatt?.getService(FmUuids.SERVICE)
+        val svc = gatt?.getService(UUID.fromString(FmUuids.SERVICE))
         if (access != FmAccess.Access.OPEN || svc == null) {
             Log.i("RideRange", "onewheel fw=$fw hw=$hardware access=$access: manual mode")
             close()
@@ -232,7 +233,7 @@ class FmManager(
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
             handler.post {
                 if (g !== gatt) return@post
-                val svc = g.getService(FmUuids.SERVICE)
+                val svc = g.getService(UUID.fromString(FmUuids.SERVICE))
                 if (svc == null) {
                     close()
                     _state.update { it.copy(phase = ScooterPhase.ERROR, message = "This device has no Onewheel service.") }
@@ -246,12 +247,12 @@ class FmManager(
         @Deprecated("API < 33")
         override fun onCharacteristicRead(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) {
             @Suppress("DEPRECATION") val v = c.value?.copyOf() ?: ByteArray(0)
-            handler.post { if (status == BluetoothGatt.GATT_SUCCESS) onValue(c.uuid, v) else if (c.uuid == FmUuids.HARDWARE) decide(); opDone() }
+            handler.post { if (status == BluetoothGatt.GATT_SUCCESS) onValue(c.uuid.toString(), v) else if (c.uuid.toString() == FmUuids.HARDWARE) decide(); opDone() }
         }
 
         override fun onCharacteristicRead(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray, status: Int) {
             val v = value.copyOf()
-            handler.post { if (status == BluetoothGatt.GATT_SUCCESS) onValue(c.uuid, v) else if (c.uuid == FmUuids.HARDWARE) decide(); opDone() }
+            handler.post { if (status == BluetoothGatt.GATT_SUCCESS) onValue(c.uuid.toString(), v) else if (c.uuid.toString() == FmUuids.HARDWARE) decide(); opDone() }
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int) { handler.post { opDone() } }
@@ -260,12 +261,12 @@ class FmManager(
         override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic) {
             if (Build.VERSION.SDK_INT >= 33) return
             @Suppress("DEPRECATION") val v = c.value?.copyOf() ?: return
-            handler.post { onValue(c.uuid, v) }
+            handler.post { onValue(c.uuid.toString(), v) }
         }
 
         override fun onCharacteristicChanged(g: BluetoothGatt, c: BluetoothGattCharacteristic, value: ByteArray) {
             val v = value.copyOf()
-            handler.post { onValue(c.uuid, v) }
+            handler.post { onValue(c.uuid.toString(), v) }
         }
     }
 }

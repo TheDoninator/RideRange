@@ -14,4 +14,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "RideRange"
-include(":app")
+include(":app", ":shared")

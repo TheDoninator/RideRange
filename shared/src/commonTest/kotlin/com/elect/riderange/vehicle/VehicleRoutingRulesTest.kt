@@ -8,12 +8,12 @@ import com.elect.riderange.routing.RouteMode
 import com.elect.riderange.routing.RoutePlans
 import com.elect.riderange.rules.BoardRules
 import com.elect.riderange.rules.Regulations
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertFalse
+import com.elect.riderange.testing.assertNotNull
+import com.elect.riderange.testing.assertNull
+import com.elect.riderange.testing.assertTrue
+import kotlin.test.Test
 
 class VehicleRoutingRulesTest {
     // ---- routing profile per vehicle type ----

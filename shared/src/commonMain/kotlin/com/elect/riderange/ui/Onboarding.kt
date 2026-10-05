@@ -51,6 +51,7 @@ import com.elect.riderange.ui.theme.RideColors
 import com.elect.riderange.vehicle.Vehicle
 import com.elect.riderange.vehicle.VehicleType
 import kotlinx.coroutines.launch
+import com.elect.riderange.core.currentTimeMillis
 
 /**
  * First run: units, rider weight, first vehicle, permissions explained. Upgraded installs (migrated garage) skip it;
@@ -142,7 +143,7 @@ fun Onboarding(vm: MainViewModel, requestLocation: () -> Unit, requestNotificati
                             scope.launch {
                                 val existing = st.vehicle
                                 if (existing == null || existing.type != t) {
-                                    val v = Vehicle.create(t, java.util.UUID.randomUUID().toString(), name.trim().ifBlank { t.label }, System.currentTimeMillis())
+                                    val v = Vehicle.create(t, kotlin.uuid.Uuid.random().toString(), name.trim().ifBlank { t.label }, currentTimeMillis())
                                     s.settings.saveVehicle(v, makeActive = true)
                                 } else if (name.isNotBlank()) s.settings.updateVehicle(existing.id) { it.copy(name = name.trim()) }
                             }

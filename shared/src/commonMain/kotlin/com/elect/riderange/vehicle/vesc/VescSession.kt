@@ -2,6 +2,7 @@ package com.elect.riderange.vehicle.vesc
 
 import com.elect.riderange.scooter.Telemetry
 import kotlin.math.abs
+import kotlin.math.roundToLong
 
 /** One motor controller's latest COMM_GET_VALUES. [local] = the one the phone talks to; others are read over CAN. */
 data class VescController(val id: Int?, val values: VescProtocol.Values, val updatedMs: Long, val local: Boolean)
@@ -71,8 +72,8 @@ data class VescSnapshot(
 
     /** BMS state of charge, else the controller's battery level, else pack voltage ÷ cells. */
     fun battery(now: Long, cellsSeries: Int?): Pair<Int, BatterySource>? {
-        freshBms(now)?.soc?.let { return Math.round(it * 100).toInt() to BatterySource.BMS }
-        freshSetup(now)?.batteryLevel?.let { return Math.round(it * 100).toInt() to BatterySource.CONTROLLER }
+        freshBms(now)?.soc?.let { return (it * 100).roundToLong().toInt() to BatterySource.BMS }
+        freshSetup(now)?.batteryLevel?.let { return (it * 100).roundToLong().toInt() to BatterySource.CONTROLLER }
         val v = voltage(now) ?: return null
         val n = cellsSeries?.takeIf { it > 0 } ?: return null
         return LiIon.percent(v / n) to BatterySource.VOLTAGE
@@ -94,7 +95,7 @@ data class VescSnapshot(
             voltage = voltage(now),
             current = totalInputCurrent(now),
             scooterTempC = ctrls.maxOfOrNull { it.values.tempMosfetC } ?: setup?.tempMosfetC,
-            batteryTempC = (bms?.tempMaxCellC ?: bms?.tempsC?.maxOrNull())?.let { Math.round(it).toInt() },
+            batteryTempC = (bms?.tempMaxCellC ?: bms?.tempsC?.maxOrNull())?.let { (it).roundToLong().toInt() },
             odometerM = odo,
             updatedMs = now,
         )

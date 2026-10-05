@@ -4,8 +4,8 @@ import com.elect.riderange.core.Http
 import com.elect.riderange.core.LatLon
 import com.elect.riderange.core.RateLimiter
 import com.elect.riderange.core.ServiceException
-import org.json.JSONObject
-import java.io.IOException
+import com.elect.riderange.core.json.JSONObject
+import com.elect.riderange.core.IOException
 
 /**
  * Free public BRouter server. Custom e-scooter profiles (no steps, no rough tracks) are uploaded once per

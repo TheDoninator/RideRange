@@ -1,22 +1,23 @@
 package com.elect.riderange.scooter.ble
 
-import java.util.UUID
-
-/** Pure BLE helpers (no Android types) so they can be unit-tested. */
+/**
+ * Pure BLE helpers (no platform types) so they can be unit-tested. UUIDs are lower-case strings with dashes
+ * ("6e400001-b5a3-..."), as java.util.UUID.toString() gives them; iOS CBUUIDs are lower-cased to match.
+ */
 object Uart {
-    val NUS_SERVICE: UUID = UUID.fromString("6e400001-b5a3-f393-e0a9-e50e24dcca9e")
-    val NUS_RX: UUID = UUID.fromString("6e400002-b5a3-f393-e0a9-e50e24dcca9e")
-    val NUS_TX: UUID = UUID.fromString("6e400003-b5a3-f393-e0a9-e50e24dcca9e")
-    val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+    val NUS_SERVICE: String = "6e400001-b5a3-f393-e0a9-e50e24dcca9e"
+    val NUS_RX: String = "6e400002-b5a3-f393-e0a9-e50e24dcca9e"
+    val NUS_TX: String = "6e400003-b5a3-f393-e0a9-e50e24dcca9e"
+    val CCCD: String = "00002902-0000-1000-8000-00805f9b34fb"
     /** "\0ninebot": UUIDs look like 6e400001-xxxx-xxxx-006e-696e65626f74 (compared without dashes). */
     const val NINEBOT_SUFFIX = "006e696e65626f74"
 
-    fun isNinebotVariant(u: UUID): Boolean = u.toString().replace("-", "").lowercase().endsWith(NINEBOT_SUFFIX)
+    fun isNinebotVariant(u: String): Boolean = u.toString().replace("-", "").lowercase().endsWith(NINEBOT_SUFFIX)
 
-    data class Choice(val service: UUID, val rx: UUID, val tx: UUID)
+    data class Choice(val service: String, val rx: String, val tx: String)
 
     /** Standard NUS first; otherwise a service ending in 006e696e65626f74 with its ...0002.../...0003... chars. */
-    fun choose(services: Map<UUID, Set<UUID>>): Choice? {
+    fun choose(services: Map<String, Set<String>>): Choice? {
         services[NUS_SERVICE]?.let { chars ->
             if (NUS_RX in chars && NUS_TX in chars) return Choice(NUS_SERVICE, NUS_RX, NUS_TX)
         }
@@ -30,7 +31,7 @@ object Uart {
     }
 
     /** Same UUID as [svc] but with the 4 hex digits after the first 4 replaced (6e40XXXX-...). */
-    private fun variant(c: UUID, svc: UUID, code: String): Boolean {
+    private fun variant(c: String, svc: String, code: String): Boolean {
         val s = svc.toString().lowercase()
         val expected = s.substring(0, 4) + code + s.substring(8)
         return c.toString().lowercase() == expected
@@ -38,11 +39,11 @@ object Uart {
 }
 
 object ScanFilter {
-    fun isNinebot(name: String?, serviceUuids: Collection<UUID>): Boolean =
+    fun isNinebot(name: String?, serviceUuids: Collection<String>): Boolean =
         (name?.startsWith("NB") == true) || (name?.startsWith("01G") == true) ||
             serviceUuids.any { it == Uart.NUS_SERVICE || Uart.isNinebotVariant(it) }
 
-    fun visible(name: String?, serviceUuids: Collection<UUID>, showAll: Boolean): Boolean =
+    fun visible(name: String?, serviceUuids: Collection<String>, showAll: Boolean): Boolean =
         showAll || isNinebot(name, serviceUuids)
 }
 

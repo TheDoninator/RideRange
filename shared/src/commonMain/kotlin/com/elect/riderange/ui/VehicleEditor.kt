@@ -52,7 +52,7 @@ import com.elect.riderange.vehicle.Vehicle
 import com.elect.riderange.vehicle.VehicleClass
 import com.elect.riderange.vehicle.VehicleType
 import kotlinx.coroutines.launch
-import java.util.Locale
+import com.elect.riderange.core.format
 
 /** Add / edit a vehicle. A new vehicle starts with the type list (presets), then the editable numbers. */
 data class EditorState(val vehicle: Vehicle, val isNew: Boolean, val pickingType: Boolean)
@@ -101,7 +101,7 @@ fun VehicleTypePicker(selected: VehicleType?, units: Units, onPick: (VehicleType
 /** Numeric text field that keeps what's typed and reports parsed values. */
 @Composable
 private fun NumField(label: String, value: Double?, suffix: String, digits: Int = 0, modifier: Modifier = Modifier, onValue: (Double?) -> Unit) {
-    var text by remember { mutableStateOf(value?.let { String.format(Locale.US, "%.${digits}f", it) } ?: "") }
+    var text by remember { mutableStateOf(value?.let { "%.${digits}f".format( it) } ?: "") }
     OutlinedTextField(
         value = text,
         onValueChange = { t -> text = t; onValue(t.replace(',', '.').toDoubleOrNull()) },

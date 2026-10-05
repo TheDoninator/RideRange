@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import com.elect.riderange.core.currentTimeMillis
 
 data class ParkingState(val spots: List<ParkingSpot> = emptyList(), val loading: Boolean = false, val error: String? = null)
 
@@ -33,7 +34,7 @@ class ParkingRepository(
 
     suspend fun load(s: Double, w: Double, n: Double, e: Double, repair: Boolean, charging: Boolean) = lock.withLock {
         val layers = layersKey(repair, charging)
-        val now = System.currentTimeMillis()
+        val now = currentTimeMillis()
         val cells = Cell.cover(s, w, n, e)
         val missing = cells.filter { c ->
             val cached = dao.cell(c.key)

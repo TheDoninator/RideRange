@@ -1,11 +1,5 @@
 package com.elect.riderange.service
 
-import android.content.Context
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
-import android.speech.tts.TextToSpeech
 import com.elect.riderange.Services
 import com.elect.riderange.scooter.ScooterPhase
 import com.elect.riderange.vehicle.vesc.RideAlertLimiter
@@ -15,8 +9,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.Locale
 import kotlin.math.roundToInt
+import com.elect.riderange.core.currentTimeMillis
 
 /**
  * Duty-cycle / pushback alerts for VESC vehicles: once a second the live VESC data is checked
@@ -28,8 +22,7 @@ class RideAlerts(private val s: Services) {
     private val limiter = RideAlertLimiter()
     private val _active = MutableStateFlow<Set<RideWarning>>(emptySet())
     val active: StateFlow<Set<RideWarning>> = _active.asStateFlow()
-    private var tts: TextToSpeech? = null
-    @Volatile private var ttsReady = false
+    private val tts by lazy { s.platform.newSpeech() }
 
     fun start() {
         s.scope.launch {
@@ -44,7 +37,7 @@ class RideAlerts(private val s: Services) {
         val st = s.scooter.state.value
         val snap = st.vesc.takeIf { st.phase == ScooterPhase.CONNECTED }
         val settings = s.settingsState.value
-        val now = System.currentTimeMillis()
+        val now = currentTimeMillis()
         val act = limiter.active(snap, now, settings.dutyAlertPct / 100.0)
         _active.value = act
         val alert = limiter.next(act, now, snap?.maxDuty(now)?.let { (it * 100).roundToInt() }) ?: return
@@ -54,12 +47,7 @@ class RideAlerts(private val s: Services) {
     }
 
     private fun vibrate(pattern: LongArray) {
-        try {
-            val v: Vibrator? = if (Build.VERSION.SDK_INT >= 31) s.context.getSystemService(VibratorManager::class.java)?.defaultVibrator
-            else @Suppress("DEPRECATION") (s.context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
-            if (v?.hasVibrator() == true) v.vibrate(VibrationEffect.createWaveform(pattern, -1))
-        } catch (_: Exception) {
-        }
+        try { s.platform.haptics.vibrate(pattern) } catch (_: Exception) {}
     }
 
     /** Short spoken status (automatic trip start/stop), so the rider knows without looking. Follows the voice-alert switch. */
@@ -67,11 +55,5 @@ class RideAlerts(private val s: Services) {
         if (s.settingsState.value.rideAlerts) speak(text)
     }
 
-    private fun speak(text: String) {
-        val t = tts ?: TextToSpeech(s.context) { status ->
-            ttsReady = status == TextToSpeech.SUCCESS
-            if (ttsReady) { tts?.language = Locale.US; tts?.speak(text, TextToSpeech.QUEUE_ADD, null, "alert") }
-        }.also { tts = it }
-        if (ttsReady) t.speak(text, TextToSpeech.QUEUE_ADD, null, "alert")
-    }
+    private fun speak(text: String) = tts.speak(text)
 }

@@ -1,10 +1,10 @@
 package com.elect.riderange.range
 
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertNotNull
+import com.elect.riderange.testing.assertNull
+import com.elect.riderange.testing.assertTrue
+import kotlin.test.Test
 import kotlin.math.abs
 import kotlin.random.Random
 

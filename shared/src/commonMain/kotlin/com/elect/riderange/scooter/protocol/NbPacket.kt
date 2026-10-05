@@ -1,5 +1,7 @@
 package com.elect.riderange.scooter.protocol
 
+import com.elect.riderange.core.format
+
 /** Device addresses and commands of the Ninebot serial protocol (same as pc/nbbridge/packet.py). */
 object Nb {
     const val CTRL = 0x20

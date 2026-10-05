@@ -2,6 +2,8 @@ package com.elect.riderange.vehicle.vesc
 
 import com.elect.riderange.scooter.Telemetry
 import kotlin.math.PI
+import kotlin.math.roundToLong
+import com.elect.riderange.core.format
 
 /**
  * VESC UART/BLE packet format, written from the publicly documented layouts (not copied from the GPL VESC sources):
@@ -186,7 +188,7 @@ object VescProtocol {
         fun optF32(scale: Double): Double? = if (avail(4)) f32(scale) else null
         fun optU32(): Long? = if (avail(4)) s32().toLong() and 0xFFFFFFFFL else null
         /** `float32_auto`: IEEE-754 bits; NaN/infinite read as null. */
-        fun optFloatAuto(): Double? = if (avail(4)) java.lang.Float.intBitsToFloat(s32()).toDouble().takeIf { it.isFinite() } else null
+        fun optFloatAuto(): Double? = if (avail(4)) Float.fromBits(s32()).toDouble().takeIf { it.isFinite() } else null
         fun skip(n: Int): Boolean = avail(n).also { if (it) pos += n }
     }
 
@@ -366,7 +368,7 @@ object VescProtocol {
     fun parseFwVersion(payload: ByteArray): FwVersion? {
         if (payload.size < 3 || cmd(payload) != COMM_FW_VERSION) return null
         val end = (3 until payload.size).firstOrNull { payload[it] == 0.toByte() } ?: payload.size
-        val name = if (end > 3) String(payload, 3, end - 3, Charsets.US_ASCII).filter { it in ' '..'~' }.ifBlank { null } else null
+        val name = if (end > 3) com.elect.riderange.core.Text.latin1(payload, 3, end).filter { it in ' '..'~' }.ifBlank { null } else null
         val r = Reader(payload, minOf(end + 1, payload.size))
         var test: Int? = null
         var hw: Int? = null
@@ -409,7 +411,7 @@ object LiIon {
             val (v1, p1) = curve[i]
             if (cellV <= v1) {
                 val (v0, p0) = curve[i - 1]
-                return Math.round(p0 + (p1 - p0) * (cellV - v0) / (v1 - v0)).toInt()
+                return (p0 + (p1 - p0) * (cellV - v0) / (v1 - v0)).roundToLong().toInt()
             }
         }
         return 100

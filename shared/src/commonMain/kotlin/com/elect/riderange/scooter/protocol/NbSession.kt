@@ -4,7 +4,13 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import java.security.SecureRandom
+import com.elect.riderange.core.PlatformLock
+import com.elect.riderange.core.withLock
+import com.elect.riderange.core.Text
+import com.elect.riderange.core.secureRandomBytes
+import com.elect.riderange.core.currentTimeMillis
+import com.elect.riderange.core.nanoTime
+import com.elect.riderange.core.format
 
 class HandshakeException(message: String) : Exception(message)
 class WriteBlockedException(message: String) : Exception(message)
@@ -52,7 +58,7 @@ class NbSession(
 ) : RegisterIo {
     private val crypto = NbCrypto()
     private val reasm = Reassembler()
-    private val lock = Any()
+    private val lock = PlatformLock()
     private val rx = Channel<NbPacket>(Channel.UNLIMITED)
     private val requests = Mutex()
     private var started = false
@@ -71,13 +77,11 @@ class NbSession(
 
     /** Set the advertised name (the first key stage). Notifications received before this are replayed. */
     fun start(name: String) {
-        val replay: List<ByteArray>
-        synchronized(lock) {
+        val replay: List<ByteArray> = lock.withLock {
             this.name = name
-            crypto.setName(name.toByteArray(Charsets.US_ASCII))
+            crypto.setName(Text.ascii(name))
             started = true
-            replay = early.toList()
-            early.clear()
+            early.toList().also { early.clear() }
         }
         replay.forEach { onNotification(it) }
     }
@@ -85,16 +89,16 @@ class NbSession(
     /** Feed one BLE notification (any thread). */
     fun onNotification(chunk: ByteArray) {
         val plains = ArrayList<ByteArray>()
-        synchronized(lock) {
+        lock.withLock {
             if (!started) {
                 early.add(chunk.copyOf())
                 return
             }
-            trace?.invoke(NbTrace(System.currentTimeMillis(), "<-", chunk.copyOf(), null))
+            trace?.invoke(NbTrace(currentTimeMillis(), "<-", chunk.copyOf(), null))
             for (raw in reasm.feed(chunk)) {
                 try {
                     val p = crypto.decrypt(raw)
-                    trace?.invoke(NbTrace(System.currentTimeMillis(), "<-", raw, p))
+                    trace?.invoke(NbTrace(currentTimeMillis(), "<-", raw, p))
                     plains.add(p)
                 } catch (_: Exception) {
                 }
@@ -112,11 +116,11 @@ class NbSession(
             throw WriteBlockedException("Read-only session: refusing to send ${pkt.describe()}")
         }
         val plain = pkt.pack()
-        val raw = synchronized(lock) {
+        val raw = lock.withLock {
             if (!started) throw HandshakeException("Session not started")
             crypto.encrypt(plain)
         }
-        trace?.invoke(NbTrace(System.currentTimeMillis(), "->", raw, plain))
+        trace?.invoke(NbTrace(currentTimeMillis(), "->", raw, plain))
         log("-> ${pkt.describe()}")
         link.send(raw)
     }
@@ -137,9 +141,9 @@ class NbSession(
     private suspend fun requestUnlocked(req: NbPacket, timeoutMs: Long, retries: Int): NbPacket {
         repeat(retries) {
             send(req)
-            val deadline = System.nanoTime() + timeoutMs * 1_000_000
+            val deadline = nanoTime() + timeoutMs * 1_000_000
             while (true) {
-                val left = (deadline - System.nanoTime()) / 1_000_000
+                val left = (deadline - nanoTime()) / 1_000_000
                 if (left <= 0) break
                 val rsp = receive(left) ?: break
                 if (matches(req, rsp)) return rsp
@@ -179,23 +183,23 @@ class NbSession(
         val ble = init.data.copyOfRange(0, 16)
         bleKey = ble
         serial = init.data.copyOfRange(16, init.data.size)
-        synchronized(lock) { crypto.setBleData(ble) }
+        lock.withLock { crypto.setBleData(ble) }
         val serialTxt = serialText
         var key = knownKey ?: keyForSerial(serialTxt)
         if (key == null && requireKnownKey) throw HandshakeException("No saved pairing key for $serialTxt")
         val newKey = key == null
-        if (key == null) key = ByteArray(16).also { SecureRandom().nextBytes(it) }
+        if (key == null) key = secureRandomBytes(16)
         appKey = key
 
         if (noPing) {
-            synchronized(lock) {
+            lock.withLock {
                 crypto.setAppData(key)
                 crypto.it = maxOf(crypto.it, 1)
             }
         } else {
             val rsp = requestUnlocked(NbPacket(src, Nb.BLE, Nb.PING, 0, key), 2000, 3)
             if (rsp.index == 1) {
-                synchronized(lock) { crypto.setAppData(key) }
+                lock.withLock { crypto.setAppData(key) }
             } else {
                 onPressButton()
                 waitForButton(key, pairTimeoutMs)
@@ -211,17 +215,17 @@ class NbSession(
     }
 
     private suspend fun waitForButton(key: ByteArray, timeoutMs: Long) {
-        val deadline = System.nanoTime() + timeoutMs * 1_000_000
-        while (System.nanoTime() < deadline) {
+        val deadline = nanoTime() + timeoutMs * 1_000_000
+        while (nanoTime() < deadline) {
             send(NbPacket(src, Nb.BLE, Nb.PAIR, 0, serial))
-            val end = System.nanoTime() + 1_000_000_000L
+            val end = nanoTime() + 1_000_000_000L
             while (true) {
-                val left = (end - System.nanoTime()) / 1_000_000
+                val left = (end - nanoTime()) / 1_000_000
                 if (left <= 0) break
                 val rsp = receive(left) ?: break
                 if (rsp.src != Nb.BLE) continue
                 if (rsp.cmd == Nb.PING && rsp.index == 1) {
-                    synchronized(lock) { crypto.setAppData(key) }
+                    lock.withLock { crypto.setAppData(key) }
                     return
                 }
                 if (rsp.cmd == Nb.PAIR && rsp.index == 1) return
@@ -235,7 +239,7 @@ class NbSession(
     val serialText: String
         get() {
             val trimmed = serial.dropLastWhile { it == 0.toByte() }.toByteArray()
-            val s = String(trimmed, Charsets.US_ASCII)
+            val s = Text.latin1(trimmed)
             return if (s.isNotEmpty() && s.all { it.code in 0x20..0x7E }) s
             else serial.joinToString("") { "%02X".format(it.toInt() and 0xFF) }
         }

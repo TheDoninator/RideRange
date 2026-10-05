@@ -1,10 +1,10 @@
 package com.elect.riderange.range
 
 import com.elect.riderange.core.Geo
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertFalse
+import com.elect.riderange.testing.assertTrue
+import kotlin.test.Test
 
 class RangeEstimatorTest {
     private val est = RangeEstimator()

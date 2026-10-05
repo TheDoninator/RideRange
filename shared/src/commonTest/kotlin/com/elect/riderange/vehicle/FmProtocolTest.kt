@@ -5,11 +5,11 @@ import com.elect.riderange.vehicle.onewheel.FmAccess
 import com.elect.riderange.vehicle.onewheel.FmAccess.Access
 import com.elect.riderange.vehicle.onewheel.FmParse
 import com.elect.riderange.vehicle.onewheel.FmUuids
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertFalse
+import com.elect.riderange.testing.assertNull
+import com.elect.riderange.testing.assertTrue
+import kotlin.test.Test
 
 class FmProtocolTest {
     private fun b(vararg x: Int) = ByteArray(x.size) { x[it].toByte() }
@@ -47,7 +47,7 @@ class FmProtocolTest {
         // pOnewheel: mph = rpm x 35 in x 60 / 63360 (35 in tyre circumference = 283 mm diameter).
         val rpm = 300
         val pOnewheelMph = 60.0 * 35.0 * rpm / 63360.0
-        assertEquals(pOnewheelMph, FmParse.speedMps(rpm, 889.0 / Math.PI) / 0.44704, 1e-9)
+        assertEquals(pOnewheelMph, FmParse.speedMps(rpm, 889.0 / kotlin.math.PI) / 0.44704, 1e-9)
         assertEquals(pOnewheelMph, FmParse.speedMps(rpm) / 0.44704, 0.05)
     }
 
@@ -62,7 +62,7 @@ class FmProtocolTest {
         assertEquals(58.7, t.voltage!!, 1e-9)
         assertEquals(FmParse.speedMps(300, 283.0), t.speedMps!!, 1e-9)
         assertEquals(35.0, t.scooterTempC!!, 1e-9)
-        assertEquals((1000 * Math.PI * 0.283).toLong(), t.odometerM)
+        assertEquals((1000 * kotlin.math.PI * 0.283).toLong(), t.odometerM)
         assertEquals(9L, t.updatedMs)
         assertFalse(FmParse.looksLocked(t))
         // A locked board reports zeros and no voltage.

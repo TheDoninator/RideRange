@@ -51,7 +51,7 @@ object Regs {
 class TelemetryPoller(
     private val io: RegisterIo,
     private val onUpdate: (Telemetry) -> Unit,
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long = { com.elect.riderange.core.currentTimeMillis() },
     private val speedPeriodMs: Long = 250,
 ) {
     var current = Telemetry()

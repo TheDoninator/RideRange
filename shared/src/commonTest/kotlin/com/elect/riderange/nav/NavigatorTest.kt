@@ -6,10 +6,10 @@ import com.elect.riderange.core.LatLon
 import com.elect.riderange.routing.BRouterParser
 import com.elect.riderange.routing.Route
 import com.elect.riderange.routing.Turn
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertFalse
+import com.elect.riderange.testing.assertTrue
+import kotlin.test.Test
 
 class NavigatorTest {
     private val route: Route = BRouterParser.parse(Fixtures.read("recorded/brouter_trekking_short.json"), "trekking")

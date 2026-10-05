@@ -7,10 +7,10 @@ import com.elect.riderange.scooter.protocol.NbCrypto
 import com.elect.riderange.scooter.protocol.NbPacket
 import com.elect.riderange.scooter.protocol.le16
 import com.elect.riderange.toHex
-import org.json.JSONObject
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import com.elect.riderange.core.json.JSONObject
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertTrue
+import kotlin.test.Test
 
 /** Copied from ninebot-bridge. The Kotlin NbCrypto must match Python miauth byte for byte (protocol/nbcrypto-vectors.json). */
 class NbCryptoTest {

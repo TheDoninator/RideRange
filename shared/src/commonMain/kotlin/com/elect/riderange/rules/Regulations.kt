@@ -1,7 +1,7 @@
 package com.elect.riderange.rules
 
-import org.json.JSONArray
-import org.json.JSONObject
+import com.elect.riderange.core.json.JSONArray
+import com.elect.riderange.core.json.JSONObject
 
 data class Source(val title: String, val url: String)
 

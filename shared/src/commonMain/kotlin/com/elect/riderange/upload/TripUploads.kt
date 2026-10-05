@@ -1,37 +1,17 @@
 package com.elect.riderange.upload
 
-import android.content.Context
-import androidx.work.BackoffPolicy
-import androidx.work.Constraints
-import androidx.work.CoroutineWorker
-import androidx.work.ExistingWorkPolicy
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import androidx.work.WorkerParameters
-import com.elect.riderange.App
+import com.elect.riderange.Services
 import com.elect.riderange.data.UploadState
 import com.elect.riderange.trips.TripExport
-import org.json.JSONArray
-import org.json.JSONObject
-import java.util.concurrent.TimeUnit
+import com.elect.riderange.core.json.JSONArray
+import com.elect.riderange.core.json.JSONObject
+import com.elect.riderange.core.currentTimeMillis
 
-/** WorkManager queue for trip uploads: network constraint (or Wi-Fi only), exponential backoff. */
+/** The upload pass shared by Android's WorkManager worker and the iOS in-app queue. */
 object TripUploads {
-    private const val WORK = "trip-upload"
-
-    fun schedule(context: Context, wifiOnly: Boolean) {
-        val req = OneTimeWorkRequestBuilder<TripUploadWorker>()
-            .setConstraints(Constraints.Builder()
-                .setRequiredNetworkType(if (wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED).build())
-            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 30, TimeUnit.SECONDS)
-            .build()
-        WorkManager.getInstance(context).enqueueUniqueWork(WORK, ExistingWorkPolicy.REPLACE, req)
-    }
-
     /** One pass over queued/failed trips. Returns true if something should be retried later. */
     suspend fun drain(): Boolean {
-        val s = App.services
+        val s = Services.instance
         val token = s.settings.token()
         val cfg = s.settings.current()
         // Opt-in only: no repository set up = nothing to do (there is no default repository).
@@ -61,15 +41,8 @@ object TripUploads {
                 .put("measured_miles", info.measuredMiles)
                 .put("measured_avg_wh_per_mi", info.measuredAvgWhPerMi ?: JSONObject.NULL)
                 .put("recent_error_pct", JSONArray().apply { info.accuracyErrors.takeLast(20).forEach { put(it) } })
-            up.uploadModel(System.currentTimeMillis(), json.toString())
+            up.uploadModel(currentTimeMillis(), json.toString())
         }
         return retry
-    }
-}
-
-class TripUploadWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
-    override suspend fun doWork(): Result {
-        App.init(applicationContext)
-        return if (TripUploads.drain()) Result.retry() else Result.success()
     }
 }

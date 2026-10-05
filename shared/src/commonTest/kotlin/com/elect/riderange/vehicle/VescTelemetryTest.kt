@@ -11,15 +11,16 @@ import com.elect.riderange.vehicle.vesc.VescProtocol
 import com.elect.riderange.vehicle.vesc.VescSession
 import com.elect.riderange.vehicle.vesc.VescSnapshot
 import com.elect.riderange.vehicle.vesc.VescVehicleParams
-import org.junit.Assert.assertArrayEquals
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Assert.fail
-import org.junit.Test
-import java.nio.ByteBuffer
+import com.elect.riderange.testing.assertArrayEquals
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertFalse
+import com.elect.riderange.testing.assertNotNull
+import com.elect.riderange.testing.assertNull
+import com.elect.riderange.testing.assertTrue
+import com.elect.riderange.testing.fail
+import kotlin.math.roundToLong
+import kotlin.test.Test
+import com.elect.riderange.testing.TestByteBuffer
 
 /**
  * 1.2.0 VESC telemetry: allow-list, CAN forwarding, GET_VALUES_SETUP, BMS, Float package, aggregation and alerts.
@@ -41,9 +42,9 @@ class VescTelemetryTest {
 
     /** COMM_GET_VALUES payload (documented order) for a controller. */
     private fun values(id: Int?, inputCurrent: Double, duty: Double = 0.3, volts: Double = 74.0, erpm: Int = 15000, tempFet: Double = 30.0): ByteArray {
-        val b = ByteBuffer.allocate(64)
-        b.put(4).putShort((tempFet * 10).toInt().toShort()).putShort(400).putInt(2000).putInt(Math.round(inputCurrent * 100).toInt())
-            .putInt(0).putInt(0).putShort(Math.round(duty * 1000).toInt().toShort()).putInt(erpm).putShort(Math.round(volts * 10).toInt().toShort())
+        val b = TestByteBuffer.allocate(64)
+        b.put(4).putShort((tempFet * 10).toInt().toShort()).putShort(400).putInt(2000).putInt((inputCurrent * 100).roundToLong().toInt())
+            .putInt(0).putInt(0).putShort((duty * 1000).roundToLong().toInt().toShort()).putInt(erpm).putShort((volts * 10).roundToLong().toInt().toShort())
             .putInt(0).putInt(0).putInt(0).putInt(0).putInt(0).putInt(9000).put(0)
         if (id != null) b.putInt(0).put(id.toByte())
         return b.array().copyOf(b.position())
@@ -292,7 +293,7 @@ class VescTelemetryTest {
         val noSetup = VescSnapshot(local = s.snapshot.local)
         val skate = noSetup.toTelemetry(10, VescVehicleParams(polePairs = 7, wheelDiameterMm = 90.0, gearRatio = 2.25, cellsSeries = 20))!!
         assertEquals(VescProtocol.speedMps(15000.0, 7, 90.0, 2.25) * 3.6, skate.speedKmh!!, 1e-9)
-        assertEquals(15000.0 / 7 / 2.25 / 60 * Math.PI * 0.090, VescProtocol.speedMps(15000.0, 7, 90.0, 2.25), 1e-9)
+        assertEquals(15000.0 / 7 / 2.25 / 60 * kotlin.math.PI * 0.090, VescProtocol.speedMps(15000.0, 7, 90.0, 2.25), 1e-9)
     }
 
     @Test fun oldFirmwareWithoutControllerIdNeverPollsCan() {

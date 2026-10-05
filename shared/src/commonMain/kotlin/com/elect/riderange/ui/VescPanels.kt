@@ -39,6 +39,8 @@ import com.elect.riderange.vehicle.vesc.VescProtocol
 import com.elect.riderange.vehicle.vesc.VescSnapshot
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import com.elect.riderange.core.currentTimeMillis
+import com.elect.riderange.core.format
 
 private val Pink = Color(0xFFC792EA)
 
@@ -75,7 +77,7 @@ fun VescRidePanel(vm: MainViewModel) {
     val scope = rememberCoroutineScope()
     val snap = sc.vesc ?: return
     if (sc.phase != ScooterPhase.CONNECTED) return
-    val now = System.currentTimeMillis()
+    val now = currentTimeMillis()
     val rt = snap.freshFloat(now)
     val ctrls = snap.controllers(now)
     if (rt == null && ctrls.size < 2 && warnings.isEmpty()) return
@@ -182,7 +184,7 @@ fun VescDetails(vm: MainViewModel) {
     val units by vm.s.ride.units.collectAsStateWithLifecycle()
     val snap: VescSnapshot = sc.vesc ?: return
     if (sc.phase != ScooterPhase.CONNECTED) return
-    val now = System.currentTimeMillis()
+    val now = currentTimeMillis()
     val ctrls = snap.controllers(now)
     val setup = snap.freshSetup(now)
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {

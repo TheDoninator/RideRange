@@ -1,9 +1,5 @@
 package com.elect.riderange.vehicle.link
 
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import androidx.core.content.ContextCompat
 import com.elect.riderange.data.SettingsStore
 import com.elect.riderange.scooter.FoundScooter
 import com.elect.riderange.scooter.ScooterManager
@@ -32,12 +28,6 @@ interface VehicleLink {
     fun disconnect()
 }
 
-fun bluetoothPermitted(context: Context): Boolean = if (Build.VERSION.SDK_INT >= 31) {
-    listOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT).all {
-        ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-    }
-} else ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-
 /** For vehicles without a supported connection: always "manual mode". */
 class ManualLink : VehicleLink {
     override val state: StateFlow<ScooterState> = MutableStateFlow(ScooterState(ScooterPhase.DISCONNECTED, manualMode = true,
@@ -53,14 +43,14 @@ class ManualLink : VehicleLink {
  * its state, so the rest of the app sees one connection. Switching vehicles disconnects the old link.
  */
 class VehicleConnector(
-    private val context: Context,
+    private val ble: BlePlatform,
     private val settings: SettingsStore,
     private val scope: CoroutineScope,
     activeVehicle: StateFlow<Vehicle?>,
 ) {
-    private val ninebot by lazy { ScooterManager(context, settings, scope) }
-    private val vesc by lazy { VescManager(context, settings, scope, activeVehicle) }
-    private val onewheel by lazy { FmManager(context, settings, scope, activeVehicle) }
+    private val ninebot by lazy { ScooterManager(ble, settings, scope) }
+    private val vesc by lazy { VescManager(ble, settings, scope, activeVehicle) }
+    private val onewheel by lazy { ble.onewheel(settings, scope, activeVehicle) }
     private val manual = ManualLink()
 
     private val _state = MutableStateFlow(ScooterState())
@@ -96,7 +86,7 @@ class VehicleConnector(
         )
     }
 
-    fun bluetoothPermitted(): Boolean = bluetoothPermitted(context)
+    fun bluetoothPermitted(): Boolean = ble.permitted()
     fun scan() = current.scan()
     fun connect(address: String, name: String? = null) = current.connect(address, name)
     fun disconnect() = current.disconnect()

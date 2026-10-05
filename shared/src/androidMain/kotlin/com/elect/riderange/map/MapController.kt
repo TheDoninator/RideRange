@@ -29,7 +29,7 @@ import org.maplibre.geojson.Point
 import org.maplibre.geojson.Polygon
 
 /** Map styling + overlays on top of OpenFreeMap (free vector tiles, no key). */
-class MapController(val map: MapLibreMap, val style: Style) {
+class MapController(val map: MapLibreMap, val style: Style) : MapSurface {
     companion object {
         const val STYLE_URL = "https://tiles.openfreemap.org/styles/liberty"
         const val ONE_WAY = "#2F80ED"
@@ -139,7 +139,7 @@ class MapController(val map: MapLibreMap, val style: Style) {
     private fun pt(p: LatLon) = Point.fromLngLat(p.lon, p.lat)
     private fun ll(p: LatLon) = LatLng(p.lat, p.lon)
 
-    fun setRange(center: LatLon?, r: RangeResult?, label: (Double) -> String) {
+    override fun setRange(center: LatLon?, r: RangeResult?, label: (Double) -> String) {
         if (center == null || r == null || r.oneWayRadiusM < 1) {
             rangeSrc.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
             rangeLabelSrc.setGeoJson(FeatureCollection.fromFeatures(emptyList()))
@@ -156,21 +156,21 @@ class MapController(val map: MapLibreMap, val style: Style) {
         )))
     }
 
-    fun setMe(p: LatLon?) {
+    override fun setMe(p: LatLon?) {
         meSrc.setGeoJson(FeatureCollection.fromFeatures(listOfNotNull(p?.let { Feature.fromGeometry(pt(it)) })))
     }
 
-    fun setDestination(p: LatLon?) {
+    override fun setDestination(p: LatLon?) {
         destSrc.setGeoJson(FeatureCollection.fromFeatures(listOfNotNull(p?.let { Feature.fromGeometry(pt(it)) })))
     }
 
-    fun setRoute(r: Route?) {
+    override fun setRoute(r: Route?) {
         routeSrc.setGeoJson(FeatureCollection.fromFeatures(listOfNotNull(r?.let {
             Feature.fromGeometry(LineString.fromLngLats(it.points.map(::pt)))
         })))
     }
 
-    fun setParking(spots: List<ParkingSpot>) {
+    override fun setParking(spots: List<ParkingSpot>) {
         parkingSrc.setGeoJson(FeatureCollection.fromFeatures(spots.map { s ->
             Feature.fromGeometry(pt(s.pos)).also {
                 it.addStringProperty("id", s.id)
@@ -181,7 +181,7 @@ class MapController(val map: MapLibreMap, val style: Style) {
     }
 
     /** Track segments, each with its own colour (speed or power). */
-    fun setTrack(points: List<LatLon>, colors: List<String>) {
+    override fun setTrack(points: List<LatLon>, colors: List<String>) {
         if (points.size < 2) { trackSrc.setGeoJson(FeatureCollection.fromFeatures(emptyList())); return }
         val feats = (1 until points.size).map { i ->
             Feature.fromGeometry(LineString.fromLngLats(listOf(pt(points[i - 1]), pt(points[i])))).also {
@@ -194,7 +194,7 @@ class MapController(val map: MapLibreMap, val style: Style) {
     fun parkingAt(x: Float, y: Float): String? =
         map.queryRenderedFeatures(PointF(x, y), PARKING_LAYER).firstOrNull()?.getStringProperty("id")
 
-    fun moveTo(p: LatLon, zoom: Double? = null, bearing: Double? = null, animate: Boolean = true) {
+    override fun moveTo(p: LatLon, zoom: Double?, bearing: Double?, animate: Boolean) {
         val b = CameraPosition.Builder().target(ll(p))
         zoom?.let { b.zoom(it) }
         bearing?.let { b.bearing(it) }
@@ -202,14 +202,14 @@ class MapController(val map: MapLibreMap, val style: Style) {
         if (animate) map.easeCamera(u, 600) else map.moveCamera(u)
     }
 
-    fun fit(points: List<LatLon>, paddingPx: Int, top: Int = paddingPx, bottom: Int = paddingPx) {
+    override fun fit(points: List<LatLon>, paddingPx: Int, top: Int, bottom: Int) {
         if (points.size < 2) return
         val bounds = LatLngBounds.Builder().includes(points.map(::ll)).build()
         map.easeCamera(CameraUpdateFactory.newLatLngBounds(bounds, paddingPx, top, paddingPx, bottom), 700)
     }
 
     /** Zoom so a circle of [radiusM] around [center] fits below the top panels. */
-    fun fitCircle(center: LatLon, radiusM: Double, top: Int, bottom: Int, side: Int) {
+    override fun fitCircle(center: LatLon, radiusM: Double, top: Int, bottom: Int, side: Int) {
         if (radiusM < 50) return
         val pts = listOf(0.0, 90.0, 180.0, 270.0).map { ll(Geo.destination(center, it, radiusM)) }
         val bounds = LatLngBounds.Builder().includes(pts).build()
@@ -218,12 +218,16 @@ class MapController(val map: MapLibreMap, val style: Style) {
 
     /** Screen area hidden by overlays, so "centre" means the visible part of the map. */
     @Suppress("DEPRECATION")
-    fun setPadding(top: Int, bottom: Int) = map.setPadding(0, top, 0, bottom)
+    override fun setPadding(top: Int, bottom: Int) = map.setPadding(0, top, 0, bottom)
 
-    fun visibleBounds(): DoubleArray {
+    override fun visibleBounds(): DoubleArray {
         val b = map.projection.visibleRegion.latLngBounds
         return doubleArrayOf(b.latitudeSouth, b.longitudeWest, b.latitudeNorth, b.longitudeEast)
     }
 
-    val zoom: Double get() = map.cameraPosition.zoom
+    override val zoom: Double get() = map.cameraPosition.zoom
+
+    override fun resetBearing() {
+        if (map.cameraPosition.bearing != 0.0) map.easeCamera(CameraUpdateFactory.bearingTo(0.0))
+    }
 }

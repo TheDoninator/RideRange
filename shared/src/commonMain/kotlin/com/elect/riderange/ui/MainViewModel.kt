@@ -2,9 +2,9 @@ package com.elect.riderange.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.elect.riderange.App
+import com.elect.riderange.Services
 import com.elect.riderange.core.LatLon
-import com.elect.riderange.map.MapController
+import com.elect.riderange.map.MapSurface
 import com.elect.riderange.parking.ParkingSpot
 import com.elect.riderange.search.Place
 import com.elect.riderange.vehicle.Vehicle
@@ -15,14 +15,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.Locale
+import com.elect.riderange.core.currentTimeMillis
+import com.elect.riderange.core.format
 
 enum class Tab(val label: String) { RIDE("Ride"), ROUTE("Route"), PARKING("Parking"), RULES("Rules"), SCOOTER("Vehicle") }
 
 data class SearchState(val query: String = "", val results: List<Place> = emptyList(), val loading: Boolean = false, val error: String? = null)
 
 class MainViewModel : ViewModel() {
-    val s = App.services
+    val s = Services.instance
 
     private val _tab = MutableStateFlow(Tab.RIDE)
     val tab: StateFlow<Tab> = _tab.asStateFlow()
@@ -39,15 +40,15 @@ class MainViewModel : ViewModel() {
     val editingVehicle = MutableStateFlow<EditorState?>(null)
 
     fun addVehicle() {
-        val id = java.util.UUID.randomUUID().toString()
-        editingVehicle.value = EditorState(Vehicle.create(VehicleType.GENERIC, id, nowMs = System.currentTimeMillis()), isNew = true, pickingType = true)
+        val id = kotlin.uuid.Uuid.random().toString()
+        editingVehicle.value = EditorState(Vehicle.create(VehicleType.GENERIC, id, nowMs = currentTimeMillis()), isNew = true, pickingType = true)
     }
 
     fun editVehicle(v: Vehicle) { editingVehicle.value = EditorState(v, isNew = false, pickingType = false) }
     fun closeEditor() { editingVehicle.value = null }
 
     fun restartOnboarding() = viewModelScope.launch { s.settings.update { it.copy(onboarded = false) } }
-    var map: MapController? = null
+    var map: MapSurface? = null
     private var parkingJob: Job? = null
     private var searchJob: Job? = null
 
@@ -81,7 +82,7 @@ class MainViewModel : ViewModel() {
     }
 
     fun onLongPress(p: LatLon) {
-        val name = String.format(Locale.US, "Dropped pin %.5f, %.5f", p.lat, p.lon)
+        val name = "Dropped pin %.5f, %.5f".format( p.lat, p.lon)
         s.nav.setDestination(Place("Dropped pin", name.removePrefix("Dropped pin "), p))
         follow.value = false
         _tab.value = Tab.ROUTE

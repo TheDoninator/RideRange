@@ -3,7 +3,9 @@ package com.elect.riderange.routing
 import com.elect.riderange.core.Geo
 import com.elect.riderange.core.LatLon
 import com.elect.riderange.vehicle.VehicleClass
-import org.json.JSONObject
+import com.elect.riderange.core.json.JSONArray
+import com.elect.riderange.core.json.JSONObject
+import com.elect.riderange.core.format
 
 enum class RouteMode(val label: String) {
     TRAILS("Bike trails"),
@@ -193,8 +195,7 @@ object RoutePlans {
 
     /** [profileId] is the resolved BRouter profile (built-in name or custom_… id). */
     fun url(base: String, from: LatLon, to: LatLon, profileId: String, alternative: Int): String =
-        String.format(
-            java.util.Locale.US, "%s?lonlats=%.6f,%.6f|%.6f,%.6f&profile=%s&alternativeidx=%d&format=geojson&timode=3",
+        "%s?lonlats=%.6f,%.6f|%.6f,%.6f&profile=%s&alternativeidx=%d&format=geojson&timode=3".format(
             base.trimEnd('/'), from.lon, from.lat, to.lon, to.lat, profileId, alternative,
         )
 }
@@ -220,13 +221,13 @@ object BatterySaver {
 object RouteCache {
     fun toJson(r: Route, destLat: Double, destLon: Double, destName: String): String {
         val o = JSONObject()
-        o.put("dest", org.json.JSONArray().put(destLat).put(destLon)).put("name", destName)
+        o.put("dest", JSONArray().put(destLat).put(destLon)).put("name", destName)
         o.put("profile", r.profile).put("alt", r.alternative).put("len", r.lengthM).put("asc", r.ascendM).put("time", r.timeS)
-        val pts = org.json.JSONArray()
-        r.points.forEachIndexed { i, p -> pts.put(org.json.JSONArray().put(p.lat).put(p.lon).put(r.elevations[i] ?: JSONObject.NULL)) }
+        val pts = JSONArray()
+        r.points.forEachIndexed { i, p -> pts.put(JSONArray().put(p.lat).put(p.lon).put(r.elevations[i] ?: JSONObject.NULL)) }
         o.put("pts", pts)
-        val ins = org.json.JSONArray()
-        r.instructions.forEach { ins.put(org.json.JSONArray().put(it.index).put(it.turn.code).put(it.exit)) }
+        val ins = JSONArray()
+        r.instructions.forEach { ins.put(JSONArray().put(it.index).put(it.turn.code).put(it.exit)) }
         o.put("ins", ins)
         return o.toString()
     }

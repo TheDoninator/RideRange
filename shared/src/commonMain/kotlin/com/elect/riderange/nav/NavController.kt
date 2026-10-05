@@ -1,6 +1,5 @@
 package com.elect.riderange.nav
 
-import android.speech.tts.TextToSpeech
 import com.elect.riderange.Services
 import com.elect.riderange.core.LatLon
 import com.elect.riderange.core.Units
@@ -17,7 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.Locale
+import com.elect.riderange.core.currentTimeMillis
 
 /** What the Route screen shows about a computed route. */
 data class RouteSummary(
@@ -56,8 +55,7 @@ class NavController(private val s: Services) {
     private var navigator: Navigator? = null
     private var planJob: Job? = null
     private var navJob: Job? = null
-    private var tts: TextToSpeech? = null
-    private var ttsReady = false
+    private val tts by lazy { s.platform.newSpeech() }
 
     fun setDestination(p: Place?) {
         _plan.update { it.copy(destination = p, summary = null, error = null) }
@@ -82,7 +80,7 @@ class NavController(private val s: Services) {
                 val sum = plan(start, dest.pos, _plan.value.mode)
                 _plan.update { it.copy(loading = false, summary = sum, error = null, fromCache = false) }
                 s.settings.saveLastRoute(RouteCache.toJson(sum.route, dest.pos.lat, dest.pos.lon, dest.name))
-                navigator?.let { if (_navigating.value) navigator = Navigator(sum.route, s.ride.units.value).also { n -> n.update(start, System.currentTimeMillis()) } }
+                navigator?.let { if (_navigating.value) navigator = Navigator(sum.route, s.ride.units.value).also { n -> n.update(start, currentTimeMillis()) } }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -154,7 +152,7 @@ class NavController(private val s: Services) {
             s.location.fix.collect { f ->
                 val n = navigator ?: return@collect
                 if (f == null) return@collect
-                val now = System.currentTimeMillis()
+                val now = currentTimeMillis()
                 val st = n.update(f.pos, now, f.accuracy)
                 _nav.value = st
                 st.speak.forEach { speak(it) }
@@ -183,20 +181,14 @@ class NavController(private val s: Services) {
         navigator = null
         _nav.value = null
         _navigating.value = false
-        tts?.stop()
+        tts.stop()
     }
 
-    private fun ensureTts() {
-        if (tts != null) return
-        tts = TextToSpeech(s.context) { status ->
-            ttsReady = status == TextToSpeech.SUCCESS
-            if (ttsReady) tts?.language = Locale.US
-        }
-    }
+    private fun ensureTts() = tts.warmUp()
 
     fun speak(text: String) {
-        if (s.ride.settings.value.voiceMuted || !ttsReady) return
-        tts?.speak(text, TextToSpeech.QUEUE_ADD, null, text.hashCode().toString())
+        if (s.ride.settings.value.voiceMuted) return
+        tts.speak(text)
     }
 
     fun units(): Units = s.ride.units.value

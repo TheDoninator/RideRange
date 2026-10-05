@@ -1,10 +1,10 @@
 package com.elect.riderange.core
 
-import org.json.JSONObject
+import com.elect.riderange.core.json.JSONObject
 
 /**
  * Optional "is there a newer version?" check against a GitHub repository's latest release (the app is distributed
- * as a GitHub release APK). Only runs when the rider taps "Check now" with a repository set; nothing is sent
+ * as GitHub release APK / IPA files). Only runs when the rider taps "Check now" with a repository set; nothing is sent
  * except the request itself.
  */
 object UpdateCheck {
@@ -12,10 +12,11 @@ object UpdateCheck {
 
     fun latestUrl(owner: String, repo: String) = "https://api.github.com/repos/$owner/$repo/releases/latest"
 
-    fun parse(json: String): Release? = try {
+    /** [assetExt]: the download for this platform (".apk" on Android, ".ipa" on iPhone). */
+    fun parse(json: String, assetExt: String = ".apk"): Release? = try {
         val o = JSONObject(json)
         val assets = o.optJSONArray("assets")
-        val apk = assets?.let { a -> (0 until a.length()).map { a.getJSONObject(it) }.firstOrNull { it.optString("name").endsWith(".apk") } }
+        val apk = assets?.let { a -> (0 until a.length()).map { a.getJSONObject(it) }.firstOrNull { it.optString("name").endsWith(assetExt) } }
         Release(o.getString("tag_name"), o.optString("name"), o.optString("html_url"), apk?.optString("browser_download_url"))
     } catch (_: Exception) { null }
 

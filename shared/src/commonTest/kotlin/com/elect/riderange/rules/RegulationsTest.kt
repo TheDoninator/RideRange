@@ -1,11 +1,11 @@
 package com.elect.riderange.rules
 
 import com.elect.riderange.Fixtures
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertNotNull
+import com.elect.riderange.testing.assertNull
+import com.elect.riderange.testing.assertTrue
+import kotlin.test.Test
 
 /** Checks the bundled dataset (src/main/assets/regulations.json) and the lookups. */
 class RegulationsTest {

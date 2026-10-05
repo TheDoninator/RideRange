@@ -4,6 +4,7 @@ import com.elect.riderange.core.Geo
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.sqrt
+import com.elect.riderange.core.format
 
 /** One measured stretch of a real ride: how far, how much energy, at what speed and grade. */
 data class MeasuredSegment(

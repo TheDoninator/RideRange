@@ -5,6 +5,7 @@ import com.elect.riderange.core.LatLon
 import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
+import com.elect.riderange.core.format
 
 /** Physical constants of rider + Max G2. All editable later; defaults are typical for an adult rider. */
 data class RideParams(

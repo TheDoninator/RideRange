@@ -1,7 +1,5 @@
 package com.elect.riderange.service
 
-import android.content.Intent
-import androidx.core.content.ContextCompat
 import com.elect.riderange.Services
 import com.elect.riderange.core.Units
 import com.elect.riderange.data.AppSettings
@@ -30,6 +28,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.elect.riderange.core.currentTimeMillis
 
 data class BatteryInfo(val pct: Double, val fromScooter: Boolean)
 
@@ -70,7 +69,7 @@ class RideHub(private val s: Services) {
     /** m/s: scooter speed when connected and fresh, else GPS. */
     val speed: StateFlow<Double?> = combine(s.location.fix, s.scooter.state) { f, sc ->
         val t = sc.telemetry
-        if (sc.phase == ScooterPhase.CONNECTED && t?.speedMps != null && System.currentTimeMillis() - t.updatedMs < 3000) t.speedMps
+        if (sc.phase == ScooterPhase.CONNECTED && t?.speedMps != null && currentTimeMillis() - t.updatedMs < 3000) t.speedMps
         else f?.speedMps
     }.stateIn(scope, SharingStarted.Eagerly, null)
 
@@ -112,26 +111,18 @@ class RideHub(private val s: Services) {
                 delay(1000)
             }
         }
-        // Keep the foreground service in step with what needs it.
+        // Keep the foreground service (iOS: background location) in step with what needs it.
         scope.launch {
             combine(recording, s.nav.navigating, s.scooter.state) { r, n, sc -> r.active || n || sc.phase == ScooterPhase.CONNECTED }
                 .distinctUntilChanged()
-                .collect { needed -> if (needed) startService() }
-        }
-    }
-
-    private fun startService() {
-        try {
-            ContextCompat.startForegroundService(s.context, Intent(s.context, RideService::class.java))
-        } catch (_: Exception) {
-            // Background start not allowed right now; the screen keeps things running while open.
+                .collect { needed -> s.platform.keeper.update(needed) }
         }
     }
 
     private suspend fun tick() {
         val f = s.location.fix.value ?: return
         s.rules.onLocation(f.pos)
-        val now = System.currentTimeMillis()
+        val now = currentTimeMillis()
         if (now - f.timeMs > 10_000) return            // stale fix: don't log
         val t = s.scooter.state.value.takeIf { it.phase == ScooterPhase.CONNECTED }?.telemetry
         val ele = elevation.update(now, f.altitude, f.vAccuracy, s.location.baroAlt.value)
@@ -170,7 +161,7 @@ class RideHub(private val s: Services) {
     private suspend fun beginTrip(manual: Boolean) {
         val pre = preBuffer.toList()
         preBuffer.clear()
-        val startMs = pre.firstOrNull()?.t ?: System.currentTimeMillis()
+        val startMs = pre.firstOrNull()?.t ?: currentTimeMillis()
         val id = s.trips.startTrip(startMs, s.scooter.state.value.serial, pre, vehicle.value?.id)
         lastSample = pre.lastOrNull()
         vehicleOff.reset()

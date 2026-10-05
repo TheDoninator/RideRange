@@ -1,11 +1,9 @@
 package com.elect.riderange.trips
 
-import org.json.JSONArray
-import org.json.JSONObject
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
+import com.elect.riderange.core.json.JSONArray
+import com.elect.riderange.core.json.JSONObject
+import com.elect.riderange.core.DateFmt
+import com.elect.riderange.core.format
 
 /** Everything about a trip that leaves the phone (export / GitHub upload). */
 data class TripRecord(
@@ -28,9 +26,9 @@ data class TripRecord(
 
 object TripExport {
     private fun iso(ms: Long): String =
-        SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }.format(Date(ms))
+        DateFmt.utc(ms, "yyyy-MM-dd'T'HH:mm:ss'Z'")
 
-    private fun f(v: Double?, digits: Int = 2): String = v?.let { String.format(Locale.US, "%.${digits}f", it) } ?: ""
+    private fun f(v: Double?, digits: Int = 2): String = v?.let { "%.${digits}f".format( it) } ?: ""
 
     fun gpx(trip: TripRecord): String = buildString {
         append("<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n")

@@ -61,7 +61,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.elect.riderange.BuildConfig
 import com.elect.riderange.core.Legal
 import com.elect.riderange.core.ServiceUrls
 import com.elect.riderange.core.UpdateCheck
@@ -80,10 +79,8 @@ import com.elect.riderange.vehicle.LinkKind
 import com.elect.riderange.vehicle.Vehicle
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
 import com.elect.riderange.vehicle.vesc.VescSimulator
-import java.util.Locale
+import com.elect.riderange.core.format
 
 /** The Vehicle tab: Garage · Connect · Trips · Settings. */
 @Composable
@@ -331,7 +328,7 @@ private fun LazyListScope.tripsSection(vm: MainViewModel) {
         val scope = rememberCoroutineScope()
         if (settings.hasToken && settings.uploadRepo.isNotBlank()) Row(verticalAlignment = Alignment.CenterVertically) {
             Text("Uploads to ${settings.uploadRepo}", Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { scope.launch { s.trips.queueAllPending(); TripUploads.schedule(s.context, settings.uploadWifiOnly) } }) { Text("Upload all pending") }
+            TextButton(onClick = { scope.launch { s.trips.queueAllPending(); s.platform.uploads.schedule(settings.uploadWifiOnly) } }) { Text("Upload all pending") }
         }
     }
     item {
@@ -347,14 +344,13 @@ private fun LazyListScope.tripsSection(vm: MainViewModel) {
     }
 }
 
-private val dateFmt = SimpleDateFormat("EEE d MMM, h:mm a", Locale.US)
 
 @Composable
 private fun TripRow(t: TripEntity, units: com.elect.riderange.core.Units, onClick: () -> Unit) {
     Card(Modifier.fillMaxWidth().clickable(onClick = onClick), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(dateFmt.format(Date(t.startMs)), style = MaterialTheme.typography.titleMedium)
+                Text(com.elect.riderange.core.DateFmt.format(t.startMs, "EEE d MMM, h:mm a"), style = MaterialTheme.typography.titleMedium)
                 Text(listOfNotNull(units.range(t.distanceM), duration(t.durationS), t.stats.whPerMi?.let { units.consumption(it) },
                     t.errorPct?.let { "model %+.0f%%".format(it) }).joinToString(" · "),
                     style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -541,7 +537,7 @@ private fun AboutSection(vm: MainViewModel) {
     var repo by remember(st.updateRepo) { mutableStateOf(st.updateRepo) }
     var updateMsg by remember { mutableStateOf<String?>(null) }
     var release by remember { mutableStateOf<UpdateCheck.Release?>(null) }
-    Section("About RideRange ${BuildConfig.VERSION_NAME}") {
+    Section("About RideRange ${s.info.versionName}") {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = { show = "privacy" }) { Text("Privacy") }
             OutlinedButton(onClick = { show = "licences" }) { Text("Licences") }
@@ -549,7 +545,7 @@ private fun AboutSection(vm: MainViewModel) {
         }
         Spacer(Modifier.height(8.dp))
         Text("Updates", style = MaterialTheme.typography.titleMedium)
-        Muted("RideRange is distributed as an APK on GitHub releases. Enter the repository to check it for a newer version (only when you tap Check).")
+        Muted("RideRange is distributed on GitHub releases (an APK for Android, an IPA for iPhone). Enter the repository to check it for a newer version (only when you tap Check).")
         OutlinedTextField(value = repo, onValueChange = { repo = it }, label = { Text("Release repository (owner/name)") }, singleLine = true,
             modifier = Modifier.fillMaxWidth())
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -560,8 +556,8 @@ private fun AboutSection(vm: MainViewModel) {
                     updateMsg = "Checking…"
                     updateMsg = try {
                         val r = s.http.get(UpdateCheck.latestUrl(p.first, p.second), mapOf("Accept" to "application/vnd.github+json"))
-                        val rel = if (r.code == 200) UpdateCheck.parse(r.body) else null
-                        release = rel?.takeIf { UpdateCheck.isNewer(it.tag, BuildConfig.VERSION_NAME) }
+                        val rel = if (r.code == 200) UpdateCheck.parse(r.body, s.info.releaseAsset) else null
+                        release = rel?.takeIf { UpdateCheck.isNewer(it.tag, s.info.versionName) }
                         when {
                             r.code == 404 -> "No releases found in $repo."
                             rel == null -> "Couldn't read the latest release (HTTP ${r.code})."

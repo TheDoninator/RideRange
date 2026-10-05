@@ -1,14 +1,15 @@
 package com.elect.riderange.vehicle.link
 
-import android.content.Context
-import android.util.Log
+import com.elect.riderange.core.Log
+import com.elect.riderange.core.PlatformLock
+import com.elect.riderange.core.withLock
 import com.elect.riderange.data.SettingsStore
 import com.elect.riderange.scooter.FoundScooter
 import com.elect.riderange.scooter.ScooterPhase
 import com.elect.riderange.scooter.ScooterState
 import com.elect.riderange.scooter.ble.LinkSnapshot
 import com.elect.riderange.scooter.ble.LinkStateKind
-import com.elect.riderange.scooter.ble.ScooterLink
+import com.elect.riderange.scooter.ble.UartLink
 import com.elect.riderange.vehicle.Vehicle
 import com.elect.riderange.vehicle.onewheel.FmParse
 import com.elect.riderange.vehicle.vesc.SimulatedVescPort
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import com.elect.riderange.core.currentTimeMillis
 
 /**
  * VESC vehicles over BLE (Nordic UART, the same GATT pipe as the Ninebot link): the local controller, other controllers
@@ -35,31 +37,31 @@ import kotlinx.coroutines.withTimeoutOrNull
  * nothing on the vehicle can be changed. Debug builds can also connect to [VescSimulator] (no Bluetooth needed).
  */
 class VescManager(
-    private val context: Context,
+    private val ble: BlePlatform,
     private val settings: SettingsStore,
     private val scope: CoroutineScope,
     private val vehicle: StateFlow<Vehicle?>,
-) : ScooterLink.Listener, VehicleLink {
+) : UartLink.Listener, VehicleLink {
     private val _state = MutableStateFlow(ScooterState())
     override val state: StateFlow<ScooterState> = _state.asStateFlow()
     private val _found = MutableStateFlow<List<FoundScooter>>(emptyList())
     override val found: StateFlow<List<FoundScooter>> = _found.asStateFlow()
     private val linkState = MutableStateFlow(LinkSnapshot())
-    private var link: ScooterLink? = null
-    @Volatile private var sim: SimulatedVescPort? = null
+    private var link: UartLink? = null
+    @kotlin.concurrent.Volatile private var sim: SimulatedVescPort? = null
     private var job: Job? = null
     private var decoder = VescProtocol.Decoder()
     private var session = VescSession()
-    private val lock = Any()
+    private val lock = PlatformLock()
 
-    private fun linkOrNull(): ScooterLink? {
-        if (!bluetoothPermitted(context)) {
-            _state.update { it.copy(phase = ScooterPhase.ERROR, message = "Allow \"Nearby devices\" so the app can reach the vehicle.") }
+    private fun linkOrNull(): UartLink? {
+        if (!ble.permitted()) {
+            _state.update { it.copy(phase = ScooterPhase.ERROR, message = ble.permissionMessage("vehicle")) }
             return null
         }
-        val l = link ?: ScooterLink(context, this).also { link = it }
+        val l = link ?: ble.uartLink(this).also { link = it }
         if (!l.bluetoothAvailable) {
-            _state.update { it.copy(phase = ScooterPhase.ERROR, message = "This device has no Bluetooth (the emulator doesn't).") }
+            _state.update { it.copy(phase = ScooterPhase.ERROR, message = "This device has no Bluetooth (emulators and simulators don't).") }
             return null
         }
         return l
@@ -80,7 +82,7 @@ class VescManager(
     override fun connect(address: String, name: String?) {
         job?.cancel()
         closeSim()
-        synchronized(lock) { decoder = VescProtocol.Decoder(); session = VescSession() }
+        lock.withLock { decoder = VescProtocol.Decoder(); session = VescSession() }
         val simulated = VescSimulator.isSimAddress(address)
         val raw: (ByteArray) -> Unit
         if (simulated) {
@@ -110,13 +112,13 @@ class VescManager(
                 settings.update { it.copy(lastScooterAddress = address, lastScooterName = name) }
             }
             _state.update { it.copy(phase = ScooterPhase.HANDSHAKE, message = "Asking the controller for its values…") }
-            synchronized(lock) { session.openingRequests() }.forEach { writer.send(it) }
-            val start = System.currentTimeMillis()
+            lock.withLock { session.openingRequests() }.forEach { writer.send(it) }
+            val start = currentTimeMillis()
             while (isActive) {
                 delay(250)
-                synchronized(lock) { session.nextRequests() }.forEach { writer.send(it) }
-                val now = System.currentTimeMillis()
-                val last = synchronized(lock) { session.lastReplyMs }
+                lock.withLock { session.nextRequests() }.forEach { writer.send(it) }
+                val now = currentTimeMillis()
+                val last = lock.withLock { session.lastReplyMs }
                 val silentFor = now - (if (last == 0L) start else last)
                 if (silentFor > 8000) {
                     fail(if (last == 0L) "Connected, but nothing answered VESC requests. Is this a VESC with BLE (Nordic UART)?"
@@ -145,7 +147,7 @@ class VescManager(
         _state.update { it.copy(phase = ScooterPhase.ERROR, message = msg, telemetry = null, vesc = null) }
     }
 
-    // ---- ScooterLink.Listener ----
+    // ---- UartLink.Listener ----
     override fun onLink(link: LinkSnapshot) {
         linkState.value = link
         if (link.state == LinkStateKind.DISCONNECTED && _state.value.phase == ScooterPhase.CONNECTED && sim == null) fail(link.reason ?: "Vehicle disconnected.")
@@ -153,8 +155,8 @@ class VescManager(
 
     /** BLE notifications (or simulator bytes) -> frames -> session -> state. Called from the BLE / simulator thread. */
     override fun onNotify(data: ByteArray) {
-        val now = System.currentTimeMillis()
-        val snap = synchronized(lock) {
+        val now = currentTimeMillis()
+        val snap = lock.withLock {
             var changed = false
             for (payload in decoder.feed(data)) if (session.onPayload(payload, now)) changed = true
             if (!changed) return

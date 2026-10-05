@@ -6,11 +6,11 @@ import com.elect.riderange.parking.Cell
 import com.elect.riderange.parking.OverpassParser
 import com.elect.riderange.parking.SpotKind
 import com.elect.riderange.search.NominatimParser
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertFalse
+import com.elect.riderange.testing.assertNotNull
+import com.elect.riderange.testing.assertTrue
+import kotlin.test.Test
 
 /** Parsers against real responses recorded from BRouter / Overpass / Nominatim on 2026-10-04. */
 class ParsersTest {

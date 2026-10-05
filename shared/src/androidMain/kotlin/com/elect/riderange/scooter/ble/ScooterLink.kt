@@ -17,24 +17,15 @@ import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.SystemClock
+import java.util.UUID
 
 /**
  * Owns the BLE scan and the GATT connection to the scooter. All work runs on one handler thread so GATT
  * operations are strictly serialized. Permissions are checked by the caller (the service) before use.
  */
 @SuppressLint("MissingPermission")
-class ScooterLink(private val context: Context, private val listener: Listener) {
+class ScooterLink(private val context: Context, private val listener: UartLink.Listener) : UartLink {
 
-    interface Listener {
-        fun onLink(link: LinkSnapshot)
-        fun onNotify(data: ByteArray)
-        fun onScanResult(name: String?, address: String, rssi: Int, ninebot: Boolean)
-        fun onScanDone()
-        fun onWriteDone(n: Int)
-        fun onWriteChunk(data: ByteArray)
-        fun onError(message: String)
-        fun onInfo(message: String)
-    }
 
     private val thread = HandlerThread("ble").apply { start() }
     private val handler = Handler(thread.looper)
@@ -54,10 +45,10 @@ class ScooterLink(private val context: Context, private val listener: Listener) 
 
     val snapshot: LinkSnapshot get() = link
 
-    val bluetoothAvailable: Boolean get() = adapter != null
+    override val bluetoothAvailable: Boolean get() = adapter != null
     val bluetoothOn: Boolean get() = adapter?.isEnabled == true
 
-    fun shutdown() {
+    override fun shutdown() {
         handler.post {
             stopScanInternal(report = false)
             reconnect.stop()
@@ -73,7 +64,7 @@ class ScooterLink(private val context: Context, private val listener: Listener) 
         override fun onScanResult(callbackType: Int, result: ScanResult) {
             val dev = result.device
             val name = result.scanRecord?.deviceName ?: try { dev.name } catch (_: SecurityException) { null }
-            val uuids = result.scanRecord?.serviceUuids?.map { it.uuid } ?: emptyList()
+            val uuids = result.scanRecord?.serviceUuids?.map { it.uuid.toString() } ?: emptyList()
             val address = dev.address
             handler.post {
                 if (name != null) names[address] = name
@@ -93,7 +84,7 @@ class ScooterLink(private val context: Context, private val listener: Listener) 
 
     private val scanTimeout = Runnable { stopScanInternal(report = true) }
 
-    fun startScan(seconds: Double) = handler.post {
+    override fun startScan(seconds: Double) { handler.post {
         val a = adapter
         if (a == null) {
             listener.onError("This device has no Bluetooth")
@@ -123,9 +114,9 @@ class ScooterLink(private val context: Context, private val listener: Listener) 
         listener.onInfo("Scanning for ${seconds.toInt()} s")
         handler.removeCallbacks(scanTimeout)
         handler.postDelayed(scanTimeout, (seconds * 1000).toLong())
-    }
+    } }
 
-    fun stopScan() = handler.post { stopScanInternal(report = true) }
+    override fun stopScan() { handler.post { stopScanInternal(report = true) } }
 
     private fun stopScanInternal(report: Boolean) {
         handler.removeCallbacks(scanTimeout)
@@ -137,20 +128,20 @@ class ScooterLink(private val context: Context, private val listener: Listener) 
 
     // ---- connection ------------------------------------------------------------------------------
 
-    fun connect(address: String) = handler.post {
+    override fun connect(address: String) { handler.post {
         userDisconnect = false
         reconnect.stop()
         handler.removeCallbacks(reconnectRunnable)
         connectInternal(address.uppercase())
-    }
+    } }
 
-    fun disconnect() = handler.post {
+    override fun disconnect() { handler.post {
         userDisconnect = true
         reconnect.stop()
         handler.removeCallbacks(reconnectRunnable)
         closeGatt()
         setLink(link.copy(state = LinkStateKind.DISCONNECTED, service = null, reason = null))
-    }
+    } }
 
     private fun connectInternal(address: String) {
         val a = adapter
@@ -246,7 +237,7 @@ class ScooterLink(private val context: Context, private val listener: Listener) 
         override fun onServicesDiscovered(g: BluetoothGatt, status: Int) {
             handler.post {
                 if (g !== gatt) return@post
-                val map = g.services.associate { s -> s.uuid to s.characteristics.map { it.uuid }.toSet() }
+                val map = g.services.associate { s -> s.uuid.toString() to s.characteristics.map { it.uuid.toString() }.toSet() }
                 val choice = Uart.choose(map)
                 if (status != BluetoothGatt.GATT_SUCCESS || choice == null) {
                     userDisconnect = true
@@ -256,14 +247,14 @@ class ScooterLink(private val context: Context, private val listener: Listener) 
                     listener.onError(reason)
                     return@post
                 }
-                val svc = g.getService(choice.service)
-                val rxChar = svc.getCharacteristic(choice.rx)
-                val txChar = svc.getCharacteristic(choice.tx)
+                val svc = g.getService(UUID.fromString(choice.service))
+                val rxChar = svc.getCharacteristic(UUID.fromString(choice.rx))
+                val txChar = svc.getCharacteristic(UUID.fromString(choice.tx))
                 rx = rxChar
                 writeType = if (rxChar.properties and BluetoothGattCharacteristic.PROPERTY_WRITE != 0)
                     BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT else BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE
                 g.setCharacteristicNotification(txChar, true)
-                val cccd = txChar.getDescriptor(Uart.CCCD)
+                val cccd = txChar.getDescriptor(UUID.fromString(Uart.CCCD))
                 if (cccd == null) {
                     finishConnected(g, choice.service.toString())
                     return@post
@@ -285,7 +276,7 @@ class ScooterLink(private val context: Context, private val listener: Listener) 
             handler.post {
                 if (g !== gatt) return@post
                 if (status != BluetoothGatt.GATT_SUCCESS) listener.onError("Enabling notifications failed ($status)")
-                finishConnected(g, pendingService ?: Uart.NUS_SERVICE.toString())
+                finishConnected(g, pendingService ?: Uart.NUS_SERVICE)
             }
         }
 
@@ -342,14 +333,14 @@ class ScooterLink(private val context: Context, private val listener: Listener) 
 
     // ---- writes ----------------------------------------------------------------------------------
 
-    fun write(data: ByteArray) = handler.post {
+    override fun write(data: ByteArray) { handler.post {
         if (link.state != LinkStateKind.CONNECTED || gatt == null || rx == null) {
             listener.onError("Not connected to a scooter")
             return@post
         }
         queue.enqueue(data)
         pump()
-    }
+    } }
 
     private fun pump() {
         queue.takeFinishedEmpty()?.let { listener.onWriteDone(0) }

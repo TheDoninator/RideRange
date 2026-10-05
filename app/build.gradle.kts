@@ -3,7 +3,6 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    alias(libs.plugins.ksp)
 }
 
 android {
@@ -15,8 +14,8 @@ android {
         applicationId = "io.github.thedoninator.riderange"
         minSdk = 26
         targetSdk = 36
-        versionCode = 7
-        versionName = "1.2.2"
+        versionCode = providers.gradleProperty("riderange.versionCode").get().toInt()
+        versionName = providers.gradleProperty("riderange.versionName").get()
         // Phone (arm64) + emulator (x86_64) only: MapLibre ships big native libraries per ABI.
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
@@ -63,11 +62,8 @@ android {
     }
 }
 
-ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
-}
-
 dependencies {
+    implementation(project(":shared"))
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -81,8 +77,6 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.room.runtime)
-    implementation(libs.androidx.room.ktx)
-    ksp(libs.androidx.room.compiler)
     implementation(libs.maplibre.android)
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.kotlinx.coroutines.android)

@@ -6,12 +6,12 @@ import com.elect.riderange.data.toLearned
 import com.elect.riderange.range.EnergyModel
 import com.elect.riderange.range.PhysicsModel
 import com.elect.riderange.range.RangeEstimator
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertFalse
+import com.elect.riderange.testing.assertNotNull
+import com.elect.riderange.testing.assertNull
+import com.elect.riderange.testing.assertTrue
+import kotlin.test.Test
 
 class GarageTest {
     @Test fun presetsAreSane() {

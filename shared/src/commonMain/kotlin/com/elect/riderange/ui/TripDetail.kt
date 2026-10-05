@@ -1,6 +1,5 @@
 package com.elect.riderange.ui
 
-import android.content.Intent
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -38,9 +37,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.core.content.FileProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.elect.riderange.core.Geo
 import com.elect.riderange.data.UploadState
@@ -49,10 +46,7 @@ import com.elect.riderange.trips.TripExport
 import com.elect.riderange.ui.theme.RideColors
 import com.elect.riderange.upload.TripUploads
 import kotlinx.coroutines.launch
-import java.io.File
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.elect.riderange.core.format
 
 /** A line chart of [ys] against [xs] (nulls are gaps). */
 @Composable
@@ -104,7 +98,6 @@ fun TripDetail(vm: MainViewModel, id: Long) {
     var samples by remember { mutableStateOf<List<Sample>>(emptyList()) }
     var confirmDelete by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
     LaunchedEffect(id) { samples = s.trips.samples(id) }
     val t = trip ?: return
 
@@ -114,13 +107,7 @@ fun TripDetail(vm: MainViewModel, id: Long) {
         samples.mapIndexed { i, smp -> if (i > 0) acc += com.elect.riderange.trips.TripMath.stepDistance(samples[i - 1], smp); acc / if (units.metric) 1000.0 else Geo.M_PER_MI }
     }
 
-    fun share(name: String, mime: String, text: String) {
-        val dir = File(context.cacheDir, "exports").apply { mkdirs() }
-        val f = File(dir, name).apply { writeText(text) }
-        val uri = FileProvider.getUriForFile(context, context.packageName + ".files", f)
-        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType(mime).putExtra(Intent.EXTRA_STREAM, uri)
-            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION), "Export trip"))
-    }
+    fun share(name: String, mime: String, text: String) = s.platform.sharer.share(name, mime, text)
 
     Column(Modifier.fillMaxSize()) {
         Spacer(Modifier.weight(0.36f))      // the map (with the coloured track) shows through here
@@ -132,7 +119,7 @@ fun TripDetail(vm: MainViewModel, id: Long) {
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(onClick = { vm.tripDetail.value = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-                    Text(SimpleDateFormat("EEE d MMM yyyy, h:mm a", Locale.US).format(Date(t.startMs)), style = MaterialTheme.typography.titleLarge)
+                    Text(com.elect.riderange.core.DateFmt.format(t.startMs, "EEE d MMM yyyy, h:mm a"), style = MaterialTheme.typography.titleLarge)
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(selected = !byPower, onClick = { vm.trackByPower.value = false }, label = { Text("Colour by speed") })
@@ -195,7 +182,7 @@ fun TripDetail(vm: MainViewModel, id: Long) {
                             if (t.uploadState != UploadState.UPLOADED) TextButton(onClick = {
                                 scope.launch {
                                     s.trips.markUpload(t.id, UploadState.QUEUED, null, null)
-                                    TripUploads.schedule(s.context, s.ride.settings.value.uploadWifiOnly)
+                                    s.platform.uploads.schedule(s.ride.settings.value.uploadWifiOnly)
                                 }
                             }) { Text(if (t.uploadState == UploadState.FAILED) "Retry upload" else "Upload") }
                             OutlinedButton(onClick = { scope.launch { s.trips.record(id)?.let { share("riderange-trip-$id.gpx", "application/gpx+xml", TripExport.gpx(it)) } } }) { Text("GPX") }

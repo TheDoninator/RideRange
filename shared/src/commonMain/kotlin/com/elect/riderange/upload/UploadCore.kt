@@ -1,15 +1,12 @@
 package com.elect.riderange.upload
 
 import com.elect.riderange.core.Http
-import org.json.JSONObject
-import java.io.ByteArrayOutputStream
-import java.io.IOException
-import java.text.SimpleDateFormat
-import java.util.Base64
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
-import java.util.zip.GZIPOutputStream
+import com.elect.riderange.core.json.JSONObject
+import com.elect.riderange.core.DateFmt
+import com.elect.riderange.core.IOException
+import com.elect.riderange.core.Text
+import com.elect.riderange.core.gzip
+import kotlinx.datetime.TimeZone
 
 // Adapted (copied, not linked) from ninebot-bridge's upload/UploadCore.kt + Sinks.kt.
 
@@ -20,12 +17,12 @@ object UploadPaths {
         return c.ifEmpty { fallback }.take(40)
     }
 
-    private fun fmt(p: String, ms: Long, tz: TimeZone) = SimpleDateFormat(p, Locale.US).apply { timeZone = tz }.format(Date(ms))
+    private fun fmt(p: String, ms: Long, tz: TimeZone) = DateFmt.format(ms, p, tz)
 
-    fun tripPath(startMs: Long, serial: String?, gzip: Boolean, tz: TimeZone = TimeZone.getDefault()): String =
+    fun tripPath(startMs: Long, serial: String?, gzip: Boolean, tz: TimeZone = TimeZone.currentSystemDefault()): String =
         "trips/${fmt("yyyy-MM-dd", startMs, tz)}/${fmt("HHmmss", startMs, tz)}-${clean(serial, "noscooter")}.json" + if (gzip) ".gz" else ""
 
-    fun modelPath(nowMs: Long, tz: TimeZone = TimeZone.getDefault()): String = "model/${fmt("yyyy-MM-dd", nowMs, tz)}-model.json"
+    fun modelPath(nowMs: Long, tz: TimeZone = TimeZone.currentSystemDefault()): String = "model/${fmt("yyyy-MM-dd", nowMs, tz)}-model.json"
 
     /** Owner/repo as typed: "owner/riderange-trips" (also accepts a github.com URL). */
     fun parseRepo(text: String): Pair<String, String>? {
@@ -43,15 +40,13 @@ object Payload {
     const val GZIP_OVER_BYTES = 900 * 1024
 
     class Encoded(val bytes: ByteArray, val gzip: Boolean) {
-        val base64: String get() = Base64.getEncoder().encodeToString(bytes)
+        val base64: String get() = Text.base64(bytes)
     }
 
     fun encode(json: String, gzipOver: Int = GZIP_OVER_BYTES): Encoded {
-        val raw = json.toByteArray(Charsets.UTF_8)
+        val raw = json.encodeToByteArray()
         if (raw.size <= gzipOver) return Encoded(raw, false)
-        val out = ByteArrayOutputStream()
-        GZIPOutputStream(out).use { it.write(raw) }
-        return Encoded(out.toByteArray(), true)
+        return Encoded(gzip(raw), true)
     }
 }
 
@@ -120,7 +115,7 @@ class GitHubUploader(
             val msg = try { JSONObject(r.body).optString("message").ifBlank { null } } catch (_: Exception) { null }
             Put(r.code, msg?.let { Redact.apply(it, listOf(token)) })
         } catch (e: IOException) {
-            Put(-1, Redact.apply(e.message ?: e.javaClass.simpleName, listOf(token)))
+            Put(-1, Redact.apply(e.message ?: e::class.simpleName ?: "error", listOf(token)))
         }
     }
 

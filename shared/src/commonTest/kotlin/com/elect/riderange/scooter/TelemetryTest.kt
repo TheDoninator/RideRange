@@ -5,9 +5,9 @@ import com.elect.riderange.scooter.protocol.Nb
 import com.elect.riderange.scooter.protocol.NbTimeout
 import com.elect.riderange.scooter.protocol.RegisterIo
 import kotlinx.coroutines.test.runTest
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
-import org.junit.Test
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertNull
+import kotlin.test.Test
 
 /** Decoding uses the raw bytes from the real Max G2 report (a Max G2 read on 2026-10-03). */
 class TelemetryTest {

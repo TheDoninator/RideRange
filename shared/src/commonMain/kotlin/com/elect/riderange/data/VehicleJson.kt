@@ -3,8 +3,8 @@ package com.elect.riderange.data
 import com.elect.riderange.vehicle.ModelSnapshot
 import com.elect.riderange.vehicle.Vehicle
 import com.elect.riderange.vehicle.VehicleType
-import org.json.JSONArray
-import org.json.JSONObject
+import com.elect.riderange.core.json.JSONArray
+import com.elect.riderange.core.json.JSONObject
 
 /** Garage <-> JSON (stored as one DataStore string). Unknown/old fields are ignored, missing ones get defaults. */
 object VehicleJson {

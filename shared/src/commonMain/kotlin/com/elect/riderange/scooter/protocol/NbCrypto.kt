@@ -1,8 +1,6 @@
 package com.elect.riderange.scooter.protocol
 
-import java.security.MessageDigest
-import javax.crypto.Cipher
-import javax.crypto.spec.SecretKeySpec
+import com.elect.riderange.core.Crypto
 
 /**
  * The classic Ninebot BLE encryption ("NinebotCrypto"), written from the algorithm used by the Python
@@ -33,14 +31,10 @@ class NbCrypto {
             val data = ByteArray(16 + b2.size)
             b1.copyInto(data, 0, 0, minOf(16, b1.size))
             b2.copyInto(data, 16)
-            return MessageDigest.getInstance("SHA-1").digest(data).copyOf(16)
+            return Crypto.sha1(data).copyOf(16)
         }
 
-        private fun aes(data: ByteArray, key: ByteArray): ByteArray {
-            val c = Cipher.getInstance("AES/ECB/NoPadding")
-            c.init(Cipher.ENCRYPT_MODE, SecretKeySpec(key, "AES"))
-            return c.doFinal(data)
-        }
+        private fun aes(data: ByteArray, key: ByteArray): ByteArray = Crypto.aes128EcbEncrypt(data, key)
 
         private fun xor(a: ByteArray, b: ByteArray, n: Int): ByteArray =
             ByteArray(n) { (a[it].toInt() xor b[it].toInt()).toByte() }

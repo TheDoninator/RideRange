@@ -4,11 +4,11 @@ import com.elect.riderange.core.Http
 import com.elect.riderange.core.LatLon
 import com.elect.riderange.core.RateLimiter
 import com.elect.riderange.core.ServiceException
-import org.json.JSONObject
-import java.io.IOException
-import java.net.URLEncoder
-import java.util.Locale
+import com.elect.riderange.core.json.JSONObject
+import com.elect.riderange.core.IOException
+import com.elect.riderange.core.Text
 import kotlin.math.floor
+import com.elect.riderange.core.format
 
 enum class SpotKind(val label: String) { PARKING("Bike parking"), REPAIR("Repair station"), CHARGING("Charging") }
 
@@ -70,7 +70,7 @@ data class Cell(val x: Int, val y: Int) {
 
 object OverpassParser {
     fun query(s: Double, w: Double, n: Double, e: Double, withRepair: Boolean, withCharging: Boolean): String {
-        val bb = String.format(Locale.US, "(%.5f,%.5f,%.5f,%.5f)", s, w, n, e)
+        val bb = "(%.5f,%.5f,%.5f,%.5f)".format( s, w, n, e)
         val parts = StringBuilder("nwr[\"amenity\"=\"bicycle_parking\"]$bb;")
         if (withRepair) parts.append("nwr[\"amenity\"=\"bicycle_repair_station\"]$bb;")
         if (withCharging) {
@@ -122,7 +122,7 @@ class OverpassClient(
     private val limiter: RateLimiter = RateLimiter(2000),
 ) {
     suspend fun fetch(s: Double, w: Double, n: Double, e: Double, withRepair: Boolean, withCharging: Boolean): List<ParkingSpot> {
-        val q = "data=" + URLEncoder.encode(OverpassParser.query(s, w, n, e, withRepair, withCharging), "UTF-8")
+        val q = "data=" + Text.urlEncode(OverpassParser.query(s, w, n, e, withRepair, withCharging))
         var lastError = "Bike parking server unavailable"
         for (url in endpointList()) {
             try {

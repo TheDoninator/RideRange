@@ -1,7 +1,6 @@
 package com.elect.riderange.vehicle.onewheel
 
 import com.elect.riderange.scooter.Telemetry
-import java.util.UUID
 import kotlin.math.PI
 
 /**
@@ -12,24 +11,24 @@ import kotlin.math.PI
  * Boards whose firmware requires Future Motion's app authentication are NOT unlocked; see [FmAccess].
  */
 object FmUuids {
-    private fun u(short: String): UUID = UUID.fromString("e659$short-ea98-11e3-ac10-0800200c9a66")
-    val SERVICE: UUID = u("f300")
-    val SERIAL: UUID = u("f301")
-    val RIDE_MODE: UUID = u("f302")
-    val BATTERY_PCT: UUID = u("f303")
-    val TRIP_ODOMETER: UUID = u("f30a")      // tyre revolutions this trip
-    val SPEED_RPM: UUID = u("f30b")
-    val STATUS: UUID = u("f30f")
-    val TEMPERATURE: UUID = u("f310")        // byte 0 controller °C, byte 1 motor °C
-    val FIRMWARE: UUID = u("f311")
-    val CURRENT: UUID = u("f312")            // signed, mA × hardware factor
-    val TRIP_AH: UUID = u("f313")            // /50
-    val TRIP_REGEN_AH: UUID = u("f314")      // /50
-    val BATTERY_TEMP: UUID = u("f315")       // two bytes °C
-    val VOLTAGE: UUID = u("f316")            // /10 V (removed on XR fw ≥ 4155, Pint fw ≥ 5059 per OWCE)
-    val HARDWARE: UUID = u("f318")
-    val LIFETIME_ODOMETER: UUID = u("f319")  // miles
-    val CCCD: UUID = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb")
+    private fun u(short: String): String = "e659$short-ea98-11e3-ac10-0800200c9a66"
+    val SERVICE: String = u("f300")
+    val SERIAL: String = u("f301")
+    val RIDE_MODE: String = u("f302")
+    val BATTERY_PCT: String = u("f303")
+    val TRIP_ODOMETER: String = u("f30a")      // tyre revolutions this trip
+    val SPEED_RPM: String = u("f30b")
+    val STATUS: String = u("f30f")
+    val TEMPERATURE: String = u("f310")        // byte 0 controller °C, byte 1 motor °C
+    val FIRMWARE: String = u("f311")
+    val CURRENT: String = u("f312")            // signed, mA × hardware factor
+    val TRIP_AH: String = u("f313")            // /50
+    val TRIP_REGEN_AH: String = u("f314")      // /50
+    val BATTERY_TEMP: String = u("f315")       // two bytes °C
+    val VOLTAGE: String = u("f316")            // /10 V (removed on XR fw ≥ 4155, Pint fw ≥ 5059 per OWCE)
+    val HARDWARE: String = u("f318")
+    val LIFETIME_ODOMETER: String = u("f319")  // miles
+    val CCCD: String = "00002902-0000-1000-8000-00805f9b34fb"
 
     /** Subscribed when the board's firmware gives data without authentication. */
     val NOTIFY = listOf(SPEED_RPM, BATTERY_PCT, VOLTAGE, CURRENT, TEMPERATURE, BATTERY_TEMP, TRIP_ODOMETER)
@@ -95,7 +94,7 @@ object FmParse {
     fun revsToMeters(revs: Int, wheelDiameterMm: Double = DEFAULT_WHEEL_MM): Double = revs * PI * wheelDiameterMm / 1000.0
 
     /** Applies one notification/read to [t]. Unknown UUIDs leave it unchanged. */
-    fun apply(t: Telemetry, uuid: UUID, value: ByteArray, wheelMm: Double, plusHardware: Boolean, nowMs: Long): Telemetry = when (uuid) {
+    fun apply(t: Telemetry, uuid: String, value: ByteArray, wheelMm: Double, plusHardware: Boolean, nowMs: Long): Telemetry = when (uuid) {
         FmUuids.SPEED_RPM -> rpm(value)?.let { t.copy(speedKmh = speedMps(it, wheelMm) * 3.6, updatedMs = nowMs) } ?: t
         FmUuids.BATTERY_PCT -> batteryPct(value)?.let { t.copy(batteryPct = it, updatedMs = nowMs) } ?: t
         FmUuids.VOLTAGE -> voltage(value)?.let { t.copy(voltage = it, updatedMs = nowMs) } ?: t

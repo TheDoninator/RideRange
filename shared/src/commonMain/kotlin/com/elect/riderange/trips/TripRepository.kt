@@ -1,9 +1,9 @@
 package com.elect.riderange.trips
 
-import android.content.Context
-import com.elect.riderange.BuildConfig
 import com.elect.riderange.core.Http
-import com.elect.riderange.data.RideDb
+import com.elect.riderange.data.TripDao
+import com.elect.riderange.core.KeyValueFlags
+import com.elect.riderange.core.UploadScheduler
 import com.elect.riderange.data.SampleEntity
 import com.elect.riderange.data.SettingsStore
 import com.elect.riderange.data.toLearned
@@ -17,11 +17,11 @@ import com.elect.riderange.range.ModelFitter
 import com.elect.riderange.range.PhysicsModel
 import com.elect.riderange.range.RideParams
 import com.elect.riderange.range.Segment
-import com.elect.riderange.upload.TripUploads
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.elect.riderange.core.currentTimeMillis
 
 /** Learned-model facts the UI shows and the range circles use. */
 data class ModelInfo(
@@ -39,12 +39,14 @@ data class ModelInfo(
 
 /** Trips in Room: finishing a trip (DEM, stats, prediction vs actual), refitting the model, queueing uploads. */
 class TripRepository(
-    private val context: Context,
+    private val dao: TripDao,
     private val settings: SettingsStore,
     private val http: Http,
+    private val flags: KeyValueFlags,
+    private val uploads: UploadScheduler,
+    private val versionName: String,
     openMeteoBase: () -> String = { com.elect.riderange.core.ServiceUrls.DEFAULT_OPEN_METEO },
 ) {
-    private val dao = RideDb.get(context).trips()
     private val meteo = OpenMeteo(http, openMeteoBase)
     private val _info = MutableStateFlow(ModelInfo(null, 0.0, null, null, null, emptyList()))
     val info: StateFlow<ModelInfo> = _info.asStateFlow()
@@ -58,7 +60,7 @@ class TripRepository(
      * (also repairs trips left without one, e.g. by an interrupted migration).
      */
     suspend fun migrateToGarage() {
-        val assign = settings.migrateToGarage(dao.count(), java.util.UUID.randomUUID().toString()) ?: settings.firstVehicleId()
+        val assign = settings.migrateToGarage(dao.count(), kotlin.uuid.Uuid.random().toString()) ?: settings.firstVehicleId()
         if (assign != null) dao.assignUnowned(assign)
     }
     fun observe(id: Long) = dao.observe(id)
@@ -119,7 +121,7 @@ class TripRepository(
         )
         dao.update(done)
         refit()
-        if (done.uploadState == UploadState.QUEUED) TripUploads.schedule(context, cfg.uploadWifiOnly)
+        if (done.uploadState == UploadState.QUEUED) uploads.schedule(cfg.uploadWifiOnly)
         return done
     }
 
@@ -130,8 +132,8 @@ class TripRepository(
      * [STATS_VERSION] (1.2.1: distance was undercounted when the odometer was polled less often than samples).
      */
     suspend fun recomputeStatsIfNeeded() {
-        val prefs = context.getSharedPreferences("trip_migrations", Context.MODE_PRIVATE)
-        if (prefs.getInt("stats_version", 0) >= STATS_VERSION) return
+        // Android: SharedPreferences "trip_migrations" (as in 1.2.1); iOS: NSUserDefaults.
+        if (flags.getInt("stats_version", 0) >= STATS_VERSION) return
         val cfg = settings.current()
         for (t in dao.finishedList()) {
             val samples = dao.samples(t.id).map { it.toSample() }
@@ -147,7 +149,7 @@ class TripRepository(
             val predicted = EnergyModel.segmentsWh(TripMath.modelSegments(samples, tempC = stats.avgTempC ?: t.weatherTempC), model)
             dao.update(t.withStats(stats).copy(predictedWh = predicted))
         }
-        prefs.edit().putInt("stats_version", STATS_VERSION).apply()
+        flags.putInt("stats_version", STATS_VERSION)
         refit()
     }
 
@@ -180,7 +182,7 @@ class TripRepository(
             cfg.useEstimatedMass, vehicle.weightKg))
         val prior = PhysicsModel(params, if (measuredMiles >= 3) (measuredWh / measuredMiles).coerceIn(6.0, 60.0) else vehicle.defaultWhPerMi).priorCoefficients()
         val fit = ModelFitter.fit(measured, prior)
-        fit.model?.let { settings.saveModel(vehicle.id, ModelSnapshot(it.coef, it.miles, it.rmse, System.currentTimeMillis())) }
+        fit.model?.let { settings.saveModel(vehicle.id, ModelSnapshot(it.coef, it.miles, it.rmse, currentTimeMillis())) }
         val learned = fit.model ?: vehicle.model?.toLearned()
         _info.value = ModelInfo(
             learned = learned,
@@ -223,7 +225,7 @@ class TripRepository(
 
     suspend fun pendingUploads() = dao.pendingUploads()
 
-    fun appVersion(): String = BuildConfig.VERSION_NAME
+    fun appVersion(): String = versionName
 }
 
 private const val STATS_VERSION = 1

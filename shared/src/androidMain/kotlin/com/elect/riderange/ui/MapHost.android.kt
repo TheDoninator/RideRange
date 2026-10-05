@@ -13,19 +13,21 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.elect.riderange.core.LatLon
 import com.elect.riderange.map.MapController
+import com.elect.riderange.map.MapSurface
+import androidx.compose.ui.platform.LocalView
 import org.maplibre.android.camera.CameraPosition
 import org.maplibre.android.geometry.LatLng
 import org.maplibre.android.maps.MapLibreMapOptions
 import org.maplibre.android.maps.MapView
 import org.maplibre.android.maps.Style
 
-/** The one MapLibre map (kept alive across tabs). Reports long-presses, taps on parking pins and camera moves. */
 @SuppressLint("ClickableViewAccessibility")
 @Composable
-fun MapHost(
+actual fun MapHost(
     modifier: Modifier,
     start: LatLon,
-    onReady: (MapController) -> Unit,
+    styleUrl: String,
+    onReady: (MapSurface) -> Unit,
     onLongPress: (LatLon) -> Unit,
     onParkingTap: (String) -> Unit,
     onCameraIdle: () -> Unit,
@@ -50,7 +52,7 @@ fun MapHost(
             getMapAsync { map ->
                 map.uiSettings.isRotateGesturesEnabled = true
                 map.uiSettings.isTiltGesturesEnabled = false
-                map.setStyle(Style.Builder().fromUri(com.elect.riderange.App.services.settingsState.value.urls.mapStyleUrl)) { style ->
+                map.setStyle(Style.Builder().fromUri(styleUrl)) { style ->
                     val c = MapController(map, style)
                     map.addOnMapLongClickListener { p -> longPress.value(LatLon(p.latitude, p.longitude)); true }
                     map.addOnMapClickListener { p ->
@@ -88,4 +90,13 @@ fun MapHost(
     }
 
     AndroidView(factory = { mapView }, modifier = modifier)
+}
+
+@Composable
+actual fun KeepScreenOn(on: Boolean) {
+    val view = LocalView.current
+    DisposableEffect(on) {
+        view.keepScreenOn = on
+        onDispose { }
+    }
 }

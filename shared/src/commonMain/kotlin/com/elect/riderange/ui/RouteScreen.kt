@@ -71,6 +71,8 @@ import com.elect.riderange.ui.theme.RideColors
 import kotlinx.coroutines.launch
 import kotlin.math.max
 import kotlin.math.roundToInt
+import com.elect.riderange.core.currentTimeMillis
+import com.elect.riderange.core.format
 
 fun turnIcon(t: Turn?): ImageVector = when (t) {
     Turn.LEFT -> Icons.Filled.TurnLeft
@@ -278,11 +280,11 @@ private fun NavOverlay(vm: MainViewModel) {
                 if (n != null && sum != null) {
                     val remaining = n.remainingM
                     val v = max(speed ?: 0.0, info.typicalSpeed ?: 6.5)
-                    val eta = System.currentTimeMillis() + (remaining / v * 1000).toLong()
+                    val eta = currentTimeMillis() + (remaining / v * 1000).toLong()
                     val whLeft = sum.wh * (remaining / max(1.0, sum.route.lengthM))
                     val arrive = s.ride.estimator().pctAfter(battery.pct, whLeft)
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Stat("ETA", android.text.format.DateFormat.format("h:mm a", eta).toString())
+                        Stat("ETA", com.elect.riderange.core.DateFmt.format(eta, "h:mm a"))
                         Stat("Left", units.range(remaining))
                         Stat("Battery at end", "%.0f%%".format(max(0.0, arrive)), color = RideColors.battery(arrive))
                     }

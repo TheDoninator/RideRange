@@ -41,6 +41,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.elect.riderange.scooter.ScooterPhase
 import com.elect.riderange.ui.theme.RideColors
 import kotlinx.coroutines.launch
+import com.elect.riderange.core.format
+import kotlin.math.roundToLong
 
 @Composable
 fun RideOverlay(vm: MainViewModel) {
@@ -127,7 +129,7 @@ fun RideOverlay(vm: MainViewModel) {
                         Text("Battery", style = MaterialTheme.typography.labelLarge)
                         Slider(
                             value = v, onValueChange = { v = it }, valueRange = 0f..100f,
-                            onValueChangeFinished = { scope.launch { s.settings.update { it.copy(manualBattery = v.toDouble().let { x -> Math.round(x).toDouble() }) } } },
+                            onValueChangeFinished = { scope.launch { s.settings.update { it.copy(manualBattery = v.toDouble().let { x -> (x).roundToLong().toDouble() }) } } },
                             modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                         )
                     }

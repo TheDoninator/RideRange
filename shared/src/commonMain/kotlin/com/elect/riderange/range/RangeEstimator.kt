@@ -2,6 +2,7 @@ package com.elect.riderange.range
 
 import com.elect.riderange.core.Geo
 import kotlin.math.max
+import com.elect.riderange.core.format
 
 /** Range settings (all editable on the Scooter tab). */
 data class RangeConfig(

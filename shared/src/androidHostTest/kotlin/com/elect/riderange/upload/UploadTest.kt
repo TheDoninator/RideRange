@@ -3,15 +3,15 @@ package com.elect.riderange.upload
 import com.elect.riderange.core.Http
 import com.elect.riderange.core.HttpResponse
 import kotlinx.coroutines.test.runTest
-import org.json.JSONObject
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Test
+import com.elect.riderange.core.json.JSONObject
+import com.elect.riderange.testing.assertEquals
+import com.elect.riderange.testing.assertFalse
+import com.elect.riderange.testing.assertNull
+import com.elect.riderange.testing.assertTrue
+import kotlin.test.Test
 import java.io.IOException
 import java.util.Base64
-import java.util.TimeZone
+import kotlinx.datetime.TimeZone
 import java.util.zip.GZIPInputStream
 
 /** The GitHub uploader against a fake HTTP layer (no real token, nothing leaves the machine). */
@@ -32,7 +32,7 @@ class UploadTest {
 
     @Test
     fun paths() {
-        val utc = TimeZone.getTimeZone("UTC")
+        val utc = TimeZone.UTC
         // 2026-10-04 15:30:05 UTC
         val ms = 1791127805000L
         assertEquals("trips/2026-10-04/153005-N4GTEST000001.json", UploadPaths.tripPath(ms, "N4GTEST000001", false, utc))

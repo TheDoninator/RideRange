@@ -1,8 +1,5 @@
 package com.elect.riderange.data
 
-import android.content.Context
-import android.security.keystore.KeyGenParameterSpec
-import android.security.keystore.KeyProperties
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -10,7 +7,6 @@ import androidx.datastore.preferences.core.doublePreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
 import com.elect.riderange.core.ServiceUrls
 import com.elect.riderange.range.LearnedModel
 import com.elect.riderange.range.MassEstimator
@@ -23,13 +19,9 @@ import com.elect.riderange.vehicle.Vehicle
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import org.json.JSONObject
-import java.security.KeyStore
-import java.util.Base64
-import javax.crypto.Cipher
-import javax.crypto.KeyGenerator
-import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
+import com.elect.riderange.core.json.JSONObject
+import com.elect.riderange.core.currentTimeMillis
+import com.elect.riderange.core.format
 
 data class AppSettings(
     val metric: Boolean = false,
@@ -77,9 +69,8 @@ data class AppSettings(
 
 fun ModelSnapshot.toLearned() = LearnedModel(coef, miles, rmse)
 
-private val Context.store: DataStore<Preferences> by preferencesDataStore("riderange")
-
-class SettingsStore(private val context: Context) {
+/** The "riderange" Preferences DataStore (same file and keys as 1.x on Android) plus the token cipher. */
+class SettingsStore(private val store: DataStore<Preferences>, private val cipher: com.elect.riderange.core.SecretCipher) {
     private object K {
         val METRIC = booleanPreferencesKey("metric")
         // 1.0.x single-scooter keys, read once by the garage migration.
@@ -121,7 +112,7 @@ class SettingsStore(private val context: Context) {
         val DUTY_ALERT = intPreferencesKey("duty_alert_pct")
     }
 
-    val settings: Flow<AppSettings> = context.store.data.map { p ->
+    val settings: Flow<AppSettings> = store.data.map { p ->
         val vehicles = VehicleJson.listFrom(p[K.GARAGE])
         val active = Garage.active(vehicles, p[K.ACTIVE])
         AppSettings(
@@ -156,7 +147,7 @@ class SettingsStore(private val context: Context) {
     suspend fun update(f: (AppSettings) -> AppSettings) {
         val old = current()
         val n = f(old)
-        context.store.edit { p ->
+        store.edit { p ->
             p[K.METRIC] = n.metric
             p[K.BATTERY] = n.manualBattery
             p[K.MUTED] = n.voiceMuted
@@ -185,7 +176,7 @@ class SettingsStore(private val context: Context) {
     }
 
     // ---- garage ----
-    private suspend fun editGarage(f: (List<Vehicle>, String?) -> Pair<List<Vehicle>, String?>) = context.store.edit { p ->
+    private suspend fun editGarage(f: (List<Vehicle>, String?) -> Pair<List<Vehicle>, String?>) = store.edit { p ->
         val (list, active) = f(VehicleJson.listFrom(p[K.GARAGE]), p[K.ACTIVE])
         p[K.GARAGE] = VehicleJson.listToJson(list)
         if (active != null) p[K.ACTIVE] = active else p.remove(K.ACTIVE)
@@ -213,14 +204,14 @@ class SettingsStore(private val context: Context) {
      */
     suspend fun migrateToGarage(tripCount: Int, newId: String): String? {
         var assign: String? = null
-        context.store.edit { p ->
+        store.edit { p ->
             if (p.contains(K.GARAGE)) return@edit
             val legacy = LegacyData(
                 packWh = p[K.PACK], usableFraction = p[K.USABLE], reservePct = p[K.RESERVE], whPerMi = p[K.WHMI],
                 detourFactor = p[K.DETOUR], scooterAddress = p[K.ADDR], scooterName = p[K.NAME], pastedKeyHex = p[K.PASTED],
                 knownSerials = keysOf(p[K.KEYS]).keys.toList(), model = legacyModel(p[K.MODEL]), tripCount = tripCount, riderLb = p[K.RIDER_LB],
             )
-            val r = GarageMigration.migrate(legacy, newId, System.currentTimeMillis())
+            val r = GarageMigration.migrate(legacy, newId, currentTimeMillis())
             p[K.GARAGE] = VehicleJson.listToJson(r.vehicles)
             r.activeId?.let { p[K.ACTIVE] = it }
             if (r.skipOnboarding) p[K.ONBOARDED] = true
@@ -237,8 +228,8 @@ class SettingsStore(private val context: Context) {
         VehicleJson.modelFrom(JSONObject(s ?: return null))
     } catch (_: Exception) { null }
 
-    suspend fun saveLastRoute(json: String?) = context.store.edit { if (json == null) it.remove(K.LAST_ROUTE) else it[K.LAST_ROUTE] = json }
-    suspend fun lastRoute(): String? = context.store.data.first()[K.LAST_ROUTE]
+    suspend fun saveLastRoute(json: String?) = store.edit { if (json == null) it.remove(K.LAST_ROUTE) else it[K.LAST_ROUTE] = json }
+    suspend fun lastRoute(): String? = store.data.first()[K.LAST_ROUTE]
 
     // ---- scooter pairing keys (serial -> 32 hex), private app storage ----
     private fun keysOf(s: String?): Map<String, String> = try {
@@ -246,11 +237,11 @@ class SettingsStore(private val context: Context) {
         o.keys().asSequence().associateWith { o.getString(it) }
     } catch (_: Exception) { emptyMap() }
 
-    private suspend fun keyMap(): Map<String, String> = keysOf(context.store.data.first()[K.KEYS])
+    private suspend fun keyMap(): Map<String, String> = keysOf(store.data.first()[K.KEYS])
 
     suspend fun key(serial: String): ByteArray? = keyMap()[serial]?.let { AppKeys.parse(it) }
 
-    suspend fun putKey(serial: String, key: ByteArray) = context.store.edit {
+    suspend fun putKey(serial: String, key: ByteArray) = store.edit {
         val m = try { JSONObject(it[K.KEYS] ?: "{}") } catch (_: Exception) { JSONObject() }
         m.put(serial, AppKeys.hex(key))
         it[K.KEYS] = m.toString()
@@ -265,12 +256,12 @@ class SettingsStore(private val context: Context) {
         updateVehicle(id) { it.copy(pastedKeyHex = hex) }
     }
 
-    // ---- GitHub token, encrypted with a non-exportable Android Keystore key ----
-    suspend fun setToken(token: String?) = context.store.edit {
-        if (token.isNullOrBlank()) it.remove(K.TOKEN) else it[K.TOKEN] = KeystoreCipher.encrypt(token.trim())
+    // ---- GitHub token, encrypted with a non-exportable Android Keystore key (iOS: kept in the Keychain) ----
+    suspend fun setToken(token: String?) = store.edit {
+        if (token.isNullOrBlank()) it.remove(K.TOKEN) else it[K.TOKEN] = cipher.encrypt(token.trim())
     }
 
-    suspend fun token(): String? = context.store.data.first()[K.TOKEN]?.let { KeystoreCipher.decryptOrNull(it) }
+    suspend fun token(): String? = store.data.first()[K.TOKEN]?.let { cipher.decryptOrNull(it) }
 }
 
 object AppKeys {
@@ -285,35 +276,3 @@ object AppKeys {
     fun hex(key: ByteArray): String = key.joinToString("") { "%02X".format(it.toInt() and 0xFF) }
 }
 
-/** AES-256-GCM with a key in the Android Keystore (copied from ninebot-bridge). Stored as base64(iv || ciphertext). */
-object KeystoreCipher {
-    private const val ALIAS = "riderange_upload_token"
-
-    private fun key(): SecretKey {
-        val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
-        (ks.getEntry(ALIAS, null) as? KeyStore.SecretKeyEntry)?.let { return it.secretKey }
-        val gen = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, "AndroidKeyStore")
-        gen.init(KeyGenParameterSpec.Builder(ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .setKeySize(256)
-            .build())
-        return gen.generateKey()
-    }
-
-    fun encrypt(plain: String): String {
-        val c = Cipher.getInstance("AES/GCM/NoPadding")
-        c.init(Cipher.ENCRYPT_MODE, key())
-        val ct = c.doFinal(plain.toByteArray(Charsets.UTF_8))
-        return Base64.getEncoder().encodeToString(c.iv + ct)
-    }
-
-    fun decryptOrNull(stored: String): String? = try {
-        val all = Base64.getDecoder().decode(stored)
-        val c = Cipher.getInstance("AES/GCM/NoPadding")
-        c.init(Cipher.DECRYPT_MODE, key(), GCMParameterSpec(128, all, 0, 12))
-        String(c.doFinal(all, 12, all.size - 12), Charsets.UTF_8)
-    } catch (_: Exception) {
-        null
-    }
-}

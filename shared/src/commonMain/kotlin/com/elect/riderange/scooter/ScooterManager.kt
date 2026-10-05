@@ -1,15 +1,11 @@
 package com.elect.riderange.scooter
 
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
-import android.util.Log
-import androidx.core.content.ContextCompat
+import com.elect.riderange.core.Log
 import com.elect.riderange.data.SettingsStore
 import com.elect.riderange.scooter.ble.LinkSnapshot
 import com.elect.riderange.scooter.ble.LinkStateKind
 import com.elect.riderange.scooter.ble.ScanFilter
-import com.elect.riderange.scooter.ble.ScooterLink
+import com.elect.riderange.scooter.ble.UartLink
 import com.elect.riderange.scooter.protocol.HandshakeException
 import com.elect.riderange.scooter.protocol.NbSession
 import kotlinx.coroutines.CoroutineScope
@@ -48,32 +44,28 @@ data class ScooterState(
  * readOnly = true (only INIT/PING/PAIR/READ can be sent), then [TelemetryPoller]. Pairing keys are saved per
  * serial; a key pasted from the Ninebot Bridge app is tried first so no re-pairing is needed.
  */
-class ScooterManager(private val context: Context, private val settings: SettingsStore, private val scope: CoroutineScope) :
-    ScooterLink.Listener, com.elect.riderange.vehicle.link.VehicleLink {
+class ScooterManager(private val ble: com.elect.riderange.vehicle.link.BlePlatform, private val settings: SettingsStore, private val scope: CoroutineScope) :
+    UartLink.Listener, com.elect.riderange.vehicle.link.VehicleLink {
     private val _state = MutableStateFlow(ScooterState())
     override val state: StateFlow<ScooterState> = _state.asStateFlow()
     private val _found = MutableStateFlow<List<FoundScooter>>(emptyList())
     override val found: StateFlow<List<FoundScooter>> = _found.asStateFlow()
     private val linkState = MutableStateFlow(LinkSnapshot())
 
-    private var link: ScooterLink? = null
-    @Volatile private var session: NbSession? = null
+    private var link: UartLink? = null
+    @kotlin.concurrent.Volatile private var session: NbSession? = null
     private var job: Job? = null
 
-    fun bluetoothPermitted(): Boolean = if (Build.VERSION.SDK_INT >= 31) {
-        listOf(android.Manifest.permission.BLUETOOTH_SCAN, android.Manifest.permission.BLUETOOTH_CONNECT).all {
-            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-        }
-    } else ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    fun bluetoothPermitted(): Boolean = ble.permitted()
 
-    private fun linkOrNull(): ScooterLink? {
+    private fun linkOrNull(): UartLink? {
         if (!bluetoothPermitted()) {
-            _state.update { it.copy(phase = ScooterPhase.ERROR, message = "Allow \"Nearby devices\" so the app can reach the scooter.") }
+            _state.update { it.copy(phase = ScooterPhase.ERROR, message = ble.permissionMessage("scooter")) }
             return null
         }
-        val l = link ?: ScooterLink(context, this).also { link = it }
+        val l = link ?: ble.uartLink(this).also { link = it }
         if (!l.bluetoothAvailable) {
-            _state.update { it.copy(phase = ScooterPhase.ERROR, message = "This device has no Bluetooth (the emulator doesn't).") }
+            _state.update { it.copy(phase = ScooterPhase.ERROR, message = "This device has no Bluetooth (emulators and simulators don't).") }
             return null
         }
         return l
@@ -121,7 +113,7 @@ class ScooterManager(private val context: Context, private val settings: Setting
                 l.disconnect()
                 return@launch
             } catch (e: Exception) {
-                fail("Connection error: ${e.message ?: e.javaClass.simpleName}")
+                fail("Connection error: ${e.message ?: e::class.simpleName ?: "error"}")
                 l.disconnect()
                 return@launch
             }
@@ -152,7 +144,7 @@ class ScooterManager(private val context: Context, private val settings: Setting
         _state.update { it.copy(phase = ScooterPhase.ERROR, message = msg, telemetry = null) }
     }
 
-    // ---- ScooterLink.Listener ----
+    // ---- UartLink.Listener ----
     override fun onLink(link: LinkSnapshot) {
         linkState.value = link
         if (link.state == LinkStateKind.DISCONNECTED && _state.value.phase == ScooterPhase.CONNECTED) {
