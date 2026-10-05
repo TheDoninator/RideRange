@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: the RideRange rings with an orange "DEV" banner, so they're easy to tell from the release. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:fillColor="#00000000" android:strokeColor="#4FA3FF" android:strokeWidth="4"
+        android:pathData="M54,26a28,28 0,1 1,0 56a28,28 0,1 1,0 -56z" />
+    <path android:fillColor="#3322C58B" android:strokeColor="#22C58B" android:strokeWidth="4"
+        android:pathData="M54,40a14,14 0,1 1,0 28a14,14 0,1 1,0 -28z" />
+    <path android:fillColor="#FFFFFF"
+        android:pathData="M54,48a6,6 0,1 1,0 12a6,6 0,1 1,0 -12z" />
+    <!-- Banner -->
+    <path android:fillColor="#FF8A00"
+        android:pathData="M37,64h34a3,3 0,0 1,3 3v8a3,3 0,0 1,-3 3h-34a3,3 0,0 1,-3 -3v-8a3,3 0,0 1,3 -3z" />
+    <!-- D -->
+    <path android:fillColor="#00000000" android:strokeColor="#14181F" android:strokeWidth="1.8"
+        android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:pathData="M43,67.5V74.5H45.5A3.5,3.5 0,0 0,45.5 67.5Z" />
+    <!-- E -->
+    <path android:fillColor="#00000000" android:strokeColor="#14181F" android:strokeWidth="1.8"
+        android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:pathData="M56,67.5H51.5V74.5H56M51.5,71H55" />
+    <!-- V -->
+    <path android:fillColor="#00000000" android:strokeColor="#14181F" android:strokeWidth="1.8"
+        android:strokeLineJoin="round" android:strokeLineCap="round"
+        android:pathData="M58.5,67.5L61.5,74.5L64.5,67.5" />
+</vector>
