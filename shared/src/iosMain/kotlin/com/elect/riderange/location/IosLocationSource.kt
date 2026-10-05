@@ -7,6 +7,7 @@ import kotlinx.cinterop.useContents
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import platform.CoreLocation.CLActivityTypeOtherNavigation
 import platform.CoreLocation.CLLocation
 import platform.CoreLocation.CLLocationManager
 import platform.CoreLocation.CLLocationManagerDelegateProtocol
@@ -55,7 +56,7 @@ class IosLocationSource : LocationSource {
         manager.delegate = delegate
         manager.desiredAccuracy = kCLLocationAccuracyBestForNavigation
         manager.distanceFilter = kCLDistanceFilterNone
-        manager.activityType = platform.CoreLocation.CLActivityType.CLActivityTypeOtherNavigation
+        manager.activityType = CLActivityTypeOtherNavigation
     }
 
     override fun hasPermission(): Boolean {

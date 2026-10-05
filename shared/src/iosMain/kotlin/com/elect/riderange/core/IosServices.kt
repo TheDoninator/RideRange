@@ -43,6 +43,10 @@ import platform.Foundation.NSUTF8StringEncoding
 import platform.Foundation.NSUserDefaults
 import platform.Foundation.create
 import platform.Foundation.dataTaskWithRequest
+import platform.Foundation.setHTTPBody
+import platform.Foundation.setHTTPMethod
+import platform.Foundation.setValue
+import platform.Foundation.NSURLRequestUseProtocolCachePolicy
 import platform.Foundation.dataUsingEncoding
 import platform.Foundation.writeToFile
 import platform.Security.SecItemAdd
@@ -74,14 +78,13 @@ class IosHttp(private val userAgent: String = Net.userAgent("iOS")) : Http {
                 cont.resumeWithException(IOException("Bad URL"))
                 return@suspendCancellableCoroutine
             }
-            val req = NSMutableURLRequest.requestWithURL(nsUrl)
-            req.HTTPMethod = method
-            req.timeoutInterval = 45.0
+            val req = NSMutableURLRequest.requestWithURL(nsUrl, NSURLRequestUseProtocolCachePolicy, 45.0)
+            req.setHTTPMethod(method)
             req.setValue(userAgent, forHTTPHeaderField = "User-Agent")
             headers.forEach { (k, v) -> req.setValue(v, forHTTPHeaderField = k) }
             if (body != null) {
                 req.setValue(contentType ?: "text/plain", forHTTPHeaderField = "Content-Type")
-                req.HTTPBody = body.encodeToByteArray().toNSData()
+                req.setHTTPBody(body.encodeToByteArray().toNSData())
             }
             val task = NSURLSession.sharedSession.dataTaskWithRequest(req) { data, response, error ->
                 if (error != null) {
@@ -172,7 +175,6 @@ class IosSpeech : Speech {
         try {
             AVAudioSession.sharedInstance().setCategory(AVAudioSessionCategoryPlayback,
                 withOptions = AVAudioSessionCategoryOptionDuckOthers or AVAudioSessionCategoryOptionMixWithOthers, error = null)
-            AVAudioSession.sharedInstance().setActive(true, error = null)
         } catch (_: Throwable) {
         }
         val u = AVSpeechUtterance.speechUtteranceWithString(text)
@@ -225,7 +227,6 @@ class IosSharer : Sharer {
         val url = NSURL.fileURLWithPath(path)
         val top = topViewController() ?: return
         val vc = UIActivityViewController(activityItems = listOf(url), applicationActivities = null)
-        vc.popoverPresentationController?.sourceView = top.view
         top.presentViewController(vc, animated = true, completion = null)
     }
 }
