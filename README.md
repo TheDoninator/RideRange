@@ -33,6 +33,68 @@ connected: `adb install -r RideRange-1.2.0-debug.apk`. A new install starts with
 first vehicle, what each permission is for). Installing 1.1.0 over 1.0.x keeps everything: the old settings, pairing
 key, learned model and all trips become a first vehicle called "Max G2" and the intro is skipped.
 
+## iPhone (sideload)
+
+RideRange 2.0 also runs on iPhone (iOS 16 or newer). There is no App Store version: each release has an unsigned
+`RideRange-<version>.ipa` that you sign with **your own free Apple ID** and install yourself.
+
+1. **Install a sideloading tool** on a computer (Windows or Mac):
+   - [SideStore](https://sidestore.io) (recommended: after setup it re-signs the app on the phone itself, no computer
+     needed every week), or
+   - [AltStore](https://altstore.io) (AltServer runs on your computer and refreshes the app over Wi-Fi), or
+   - [Sideloadly](https://sideloadly.io) (simplest one-off install from a computer; you redo it every 7 days).
+2. **Download** `RideRange-<version>.ipa` from [Releases](https://github.com/TheDoninator/RideRange/releases) and open it
+   with the tool. Sign in with your Apple ID when asked (an app-specific password works; the Apple ID is only sent to
+   Apple to make the signing certificate).
+3. **Turn on Developer Mode** on the iPhone: Settings > Privacy & Security > Developer Mode > on, restart, confirm.
+   (It only appears after a sideloaded app was installed once.)
+4. **Trust your certificate** if iOS asks: Settings > General > VPN & Device Management > your Apple ID > Trust.
+5. Open RideRange: the intro asks for units, your weight and your first vehicle, then for location. Bluetooth is only
+   asked for when you tap Scan on the Vehicle tab.
+
+Free Apple ID limits: the signature lasts **7 days** (SideStore / AltStore refresh it automatically when they can
+reach their helper; with Sideloadly reinstall it, your data stays), at most **3 sideloaded apps** at a time, and
+10 app IDs per week. Updates: install the new `.ipa` over the old one the same way; trips and settings are kept.
+
+What works on iPhone: everything on the five tabs (same shared code and screens as Android): range circles, routing
+and navigation with voice, parking, rules, garage, trips with charts and GPX/CSV export (share sheet), the read-only
+Ninebot / VESC / Onewheel Bluetooth links, ride alerts, GitHub upload and the update check (it looks for the `.ipa`).
+Differences:
+- **Screen off**: while a trip records, navigation runs or a vehicle is connected, the app keeps getting location in
+  the background (the blue location pill shows); Bluetooth keeps working too. When none of that is going on, iOS
+  suspends the app, so automatic trip start needs the app open (same as Android without the ride service).
+- **Bluetooth addresses**: iPhones don't expose a vehicle's Bluetooth MAC address, so vehicles must be picked from a
+  Scan on the iPhone (an address typed in or copied from an Android phone won't connect).
+- **Uploads** are retried while the app is open and on the next start (no background scheduler); "Wi-Fi only" isn't
+  enforced on iPhone. The GitHub token is kept in the iOS Keychain.
+- **Vibration** for ride alerts is the standard iPhone buzz (iOS has no custom patterns without Core Haptics).
+- Barometric elevation uses the iPhone's barometer (iOS asks for "Motion & Fitness" the first time).
+- No debug VESC simulator on iPhone.
+
+What to test on a real iPhone (none of this can be checked on the simulator): the GPS speed and the range circles
+while riding, a recorded trip with the screen locked (does it keep recording? is the blue pill shown?), turn-by-turn
+voice prompts with the screen locked and with music playing, connecting to a Ninebot Max G2 (pairing button press,
+live speed/battery/power on the Ride tab, staying connected with the screen off), VESC / Onewheel boards if available,
+GPX/CSV export through the share sheet, and that the app survives the 7-day re-signing with its trips intact.
+
+### Building the iPhone app
+
+Everything iOS is built on GitHub Actions macOS runners (`.github/workflows/build.yml`), no Mac needed: the shared
+Kotlin code becomes the static framework `Shared` (`./gradlew :shared:linkReleaseFrameworkIosArm64`), XcodeGen
+generates the Xcode project from `iosApp/project.yml` (MapLibre iOS comes from Swift Package Manager), and `xcodebuild`
+builds for "generic iOS device" with `CODE_SIGNING_ALLOWED=NO`; `Payload/RideRange.app` zipped is the `.ipa`. The same
+workflow runs the shared tests on the iOS simulator and takes simulator screenshots of each tab (artifacts).
+
+## Project layout (2.0)
+
+- `shared/` - Kotlin Multiplatform module with almost everything: range/energy/mass models, trips, routing, search,
+  parking, rules, navigation, the Ninebot / VESC / Onewheel protocols, settings and database (Room KMP + DataStore),
+  and the Compose Multiplatform UI. `androidMain` / `iosMain` hold the platform pieces (Bluetooth, location, map,
+  speech, haptics, HTTP, Keychain/Keystore, share sheet); `commonTest` runs on the JVM and on the iOS simulator.
+- `app/` - the Android app (same application id, signing and data as 1.x): activity, foreground ride service,
+  WorkManager upload worker, debug-only VESC simulator.
+- `iosApp/` - the iPhone app shell (SwiftUI host, MapLibre iOS map, Info.plist, icon) and its XcodeGen spec.
+
 ## Garage (1.1.0)
 
 Every vehicle has its own battery size and usable share, reserve, starting Wh/mi, detour factor, weight, top speed,
@@ -175,7 +237,10 @@ each trip shows queued / uploaded / failed with a retry button, and Trips has "U
 
 ## Tests
 
-`gradlew testDebugUnitTest` (104 tests): range estimator, energy model and Battery-saver scoring (with real recorded
+`gradlew :shared:testAndroidHostTest :app:testDebugUnitTest` (2.0: 138 shared tests + the debug simulator test; the
+shared ones also run on the iOS simulator with `:shared:iosSimulatorArm64Test` on CI). 2.0 adds checks for the common
+replacements of JVM APIs (SHA-1 / AES-128 vectors, printf formatting, org.json-compatible JSON, dates), a 1.2.2
+garage read back, and the Room schema hash being unchanged since 1.1. Before 2.0: `gradlew testDebugUnitTest` (104 tests): range estimator, energy model and Battery-saver scoring (with real recorded
 BRouter routes), model fitting on synthetic rides, navigation (snapping, announcements, off-route + reroute rate
 limit, arrival) on a real BRouter route, parsers against real BRouter / Overpass / Nominatim responses recorded
 2026-10-04 (`app/src/test/resources/recorded/`), the regulations dataset (all 50 states + DC, Utah topics, city
